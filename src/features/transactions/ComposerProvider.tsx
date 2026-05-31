@@ -1,5 +1,4 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
-import { Sheet } from '@/ui'
 import { AddTransaction, type ComposerPrefill } from './AddTransaction'
 
 interface ComposerApi {
@@ -34,9 +33,7 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
   return (
     <ComposerContext.Provider value={api}>
       {children}
-      <Sheet open={open} onOpenChange={setOpen} title="New entry">
-        <AddTransaction prefill={prefill} onDone={() => setOpen(false)} />
-      </Sheet>
+      <AddTransaction open={open} onOpenChange={setOpen} prefill={prefill} />
     </ComposerContext.Provider>
   )
 }
