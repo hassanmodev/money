@@ -1,0 +1,161 @@
+@import 'tailwindcss';
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Cozy Money — warm, minimal, dark design tokens
+   Tailwind v4 CSS-first theme. Every value here becomes a utility:
+   --color-clay → bg-clay / text-clay / border-clay, etc.
+   ──────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Surfaces — warm near-blacks, a touch of brown rather than cold gray */
+  --color-canvas: #14100c;
+  --color-canvas-2: #181410;
+  --color-surface: #1e1813;
+  --color-raised: #271f18;
+  --color-sunken: #100c08;
+
+  /* Lines — hairline borders, barely-there */
+  --color-line: #322a20;
+  --color-line-2: #40362a;
+
+  /* Ink — warm off-whites down to faint labels */
+  --color-ink: #f3ece1;
+  --color-muted: #b4a695;
+  --color-faint: #7c7062;
+  --color-ghost: #574d42;
+
+  /* Accents — the warm heart of the palette */
+  --color-clay: #d4845c; /* primary action / highlight */
+  --color-clay-soft: #b06f4e;
+  --color-honey: #e7b079; /* amber glow */
+  --color-sage: #a2bd87; /* growth · positive */
+  --color-rust: #d98a7e; /* expense · decay · negative */
+
+  /* Curated warm swatches for money boxes */
+  --color-box-clay: #d4845c;
+  --color-box-honey: #e0aa66;
+  --color-box-sage: #9eb87f;
+  --color-box-teal: #74b1a3;
+  --color-box-dusk: #8aa0c8;
+  --color-box-plum: #b88cc0;
+  --color-box-rose: #db8a82;
+  --color-box-ochre: #cba24f;
+
+  /* Type */
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system,
+    'Segoe UI', sans-serif;
+  --font-serif: 'Fraunces Variable', ui-serif, 'Iowan Old Style', Georgia, serif;
+
+  /* Soft radii */
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.75rem;
+
+  /* Whisper-soft, warm shadows (no harsh black) */
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.25), 0 10px 30px -16px rgb(0 0 0 / 0.55);
+  --shadow-lift: 0 2px 6px rgb(0 0 0 / 0.3), 0 24px 60px -28px rgb(0 0 0 / 0.65);
+  --shadow-glow: 0 0 0 1px rgb(212 132 92 / 0.15), 0 18px 50px -20px rgb(212 132 92 / 0.25);
+
+  /* Motion */
+  --ease-cozy: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  * {
+    border-color: var(--color-line);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv05' 1, 'cv08' 1, 'ss03' 1;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  /* A warm, breathing glow behind everything — the "cozy" base layer */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(900px 500px at 12% -8%, rgb(212 132 92 / 0.1), transparent 60%),
+      radial-gradient(800px 600px at 100% 0%, rgb(231 176 121 / 0.06), transparent 55%),
+      radial-gradient(1000px 800px at 50% 120%, rgb(116 177 163 / 0.05), transparent 60%);
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-serif);
+    font-weight: 460;
+    letter-spacing: -0.01em;
+  }
+
+  /* Numbers feel grounded when they don't dance around */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  ::selection {
+    background: rgb(212 132 92 / 0.28);
+    color: var(--color-ink);
+  }
+
+  /* Quiet, warm scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-2) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-line-2);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--color-ghost);
+    background-clip: content-box;
+  }
+
+  /* Respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Reusable cozy surface treatment */
+@utility card-surface {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-soft);
+}
+
+@utility hairline {
+  border: 1px solid var(--color-line);
+}

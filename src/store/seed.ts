@@ -1,0 +1,190 @@
+/** Pleasant demo data so the app feels alive on first run. */
+import type { FinanceState } from '@/domain'
+
+const CREATED = '2025-09-01T10:00:00.000Z'
+
+/** A fresh copy of the starter world (never share references with the store). */
+export function createSeed(): FinanceState {
+  return {
+    settings: {
+      baseCurrency: 'EUR',
+      // value of 1 unit in EUR
+      rates: { EUR: 1, USD: 0.92, GBP: 1.17, CHF: 1.04, BTC: 92000, XAU: 2400 },
+    },
+    goals: [
+      { id: 'goal-fund', label: 'Emergency fund', target: 15000, color: '#9eb87f' },
+      { id: 'goal-house', label: 'House deposit', target: 60000, color: '#d4845c' },
+    ],
+    boxes: [
+      {
+        id: 'box-cash',
+        name: 'Cash at home',
+        kind: 'cash',
+        currency: 'EUR',
+        openingBalance: 760,
+        openingDate: '2024-01-01',
+        color: '#e0aa66',
+        icon: 'Banknote',
+        note: 'The jar on the shelf.',
+        effects: [
+          { id: 'fx-cash-inf', kind: 'inflation', annualRate: 0.032, compounding: 'annually' },
+        ],
+        createdAt: CREATED,
+      },
+      {
+        id: 'box-checking',
+        name: 'Everyday',
+        kind: 'checking',
+        currency: 'EUR',
+        openingBalance: 3400,
+        openingDate: '2025-09-01',
+        color: '#d4845c',
+        icon: 'Wallet',
+        effects: [],
+        createdAt: CREATED,
+      },
+      {
+        id: 'box-savings',
+        name: 'Rainy day',
+        kind: 'savings',
+        currency: 'EUR',
+        openingBalance: 9000,
+        openingDate: '2024-01-01',
+        color: '#9eb87f',
+        icon: 'PiggyBank',
+        effects: [
+          { id: 'fx-sav-int', kind: 'interest', annualRate: 0.036, compounding: 'monthly' },
+        ],
+        createdAt: CREATED,
+      },
+      {
+        id: 'box-brokerage',
+        name: 'Brokerage',
+        kind: 'investment',
+        currency: 'USD',
+        openingBalance: 16000,
+        openingDate: '2023-06-01',
+        color: '#8aa0c8',
+        icon: 'ChartLine',
+        note: 'Index funds, mostly.',
+        effects: [
+          { id: 'fx-brk-app', kind: 'appreciation', annualRate: 0.07, compounding: 'annually' },
+        ],
+        createdAt: CREATED,
+      },
+      {
+        id: 'box-btc',
+        name: 'Bitcoin',
+        kind: 'crypto',
+        currency: 'BTC',
+        openingBalance: 0.12,
+        openingDate: '2022-03-01',
+        color: '#cba24f',
+        icon: 'Bitcoin',
+        effects: [
+          { id: 'fx-btc-app', kind: 'appreciation', annualRate: 0.18, compounding: 'annually' },
+        ],
+        createdAt: CREATED,
+      },
+      {
+        id: 'box-gold',
+        name: 'Gold',
+        kind: 'asset',
+        currency: 'XAU',
+        openingBalance: 3,
+        openingDate: '2023-01-01',
+        color: '#b88cc0',
+        icon: 'Gem',
+        effects: [
+          { id: 'fx-gold-app', kind: 'appreciation', annualRate: 0.04, compounding: 'annually' },
+        ],
+        createdAt: CREATED,
+      },
+    ],
+    transactions: [
+      // ── recurring rhythm of the month ──
+      r('tx-salary', 'income', 'box-checking', 3600, 'salary', '2025-09-25', { every: 1, unit: 'month' }, 'Monthly pay'),
+      r('tx-rent', 'expense', 'box-checking', 1250, 'rent', '2025-09-01', { every: 1, unit: 'month' }),
+      r('tx-groceries', 'expense', 'box-checking', 85, 'groceries', '2025-09-05', { every: 1, unit: 'week' }),
+      r('tx-subs', 'expense', 'box-checking', 15.99, 'subscriptions', '2025-09-12', { every: 1, unit: 'month' }, 'Streaming'),
+      r('tx-gym', 'expense', 'box-checking', 39, 'fitness', '2025-09-03', { every: 1, unit: 'month' }),
+      r('tx-phone', 'expense', 'box-checking', 25, 'utilities', '2025-09-18', { every: 1, unit: 'month' }, 'Phone'),
+      t('tx-autosave', 'transfer', 'box-checking', 700, 'savings', '2025-09-26', 'box-savings', { every: 1, unit: 'month' }, 'Auto-save'),
+      t('tx-dca', 'transfer', 'box-checking', 300, 'investing', '2025-09-27', 'box-brokerage', { every: 1, unit: 'month' }, 'Dollar-cost average'),
+
+      // ── recent one-offs for the activity feed ──
+      o('tx-r1', 'expense', 'box-checking', 48.5, 'dining', '2026-05-29', 'Trattoria with friends'),
+      o('tx-r2', 'expense', 'box-cash', 4.8, 'coffee', '2026-05-30'),
+      o('tx-r3', 'expense', 'box-checking', 32, 'shopping', '2026-05-27', 'Bookshop'),
+      o('tx-r4', 'expense', 'box-checking', 64.3, 'groceries', '2026-05-24'),
+      o('tx-r5', 'expense', 'box-checking', 18.2, 'health', '2026-05-22', 'Pharmacy'),
+      o('tx-r6', 'income', 'box-checking', 450, 'salary', '2026-05-20', 'Side gig'),
+      o('tx-r7', 'expense', 'box-checking', 120, 'fun', '2026-05-16', 'Live show'),
+    ],
+  }
+}
+
+// ── tiny builders to keep the seed readable ──
+type Cad = { every: number; unit: 'day' | 'week' | 'month' | 'year' }
+
+function r(
+  id: string,
+  kind: 'income' | 'expense',
+  boxId: string,
+  amount: number,
+  category: string,
+  anchor: string,
+  cad: Cad,
+  note?: string,
+) {
+  return {
+    id,
+    kind,
+    boxId,
+    amount,
+    currency: 'EUR',
+    category,
+    note,
+    date: anchor,
+    recurrence: { ...cad, anchor, end: { type: 'never' as const } },
+    createdAt: CREATED,
+  }
+}
+
+function t(
+  id: string,
+  kind: 'transfer',
+  boxId: string,
+  amount: number,
+  category: string,
+  anchor: string,
+  toBoxId: string,
+  cad: Cad,
+  note?: string,
+) {
+  return {
+    id,
+    kind,
+    boxId,
+    toBoxId,
+    amount,
+    currency: 'EUR',
+    category,
+    note,
+    date: anchor,
+    recurrence: { ...cad, anchor, end: { type: 'never' as const } },
+    createdAt: CREATED,
+  }
+}
+
+function o(
+  id: string,
+  kind: 'income' | 'expense',
+  boxId: string,
+  amount: number,
+  category: string,
+  date: string,
+  note?: string,
+) {
+  return { id, kind, boxId, amount, currency: 'EUR', category, note, date, createdAt: CREATED }
+}
