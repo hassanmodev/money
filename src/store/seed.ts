@@ -10,6 +10,7 @@ export function createSeed(): FinanceState {
       baseCurrency: 'EUR',
       // value of 1 unit in EUR
       rates: { EUR: 1, USD: 0.92, GBP: 1.17, CHF: 1.04, BTC: 92000, XAU: 2400 },
+      inflation: 0.025,
     },
     goals: [
       { id: 'goal-fund', label: 'Emergency fund', target: 15000, color: '#9eb87f' },

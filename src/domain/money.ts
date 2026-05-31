@@ -53,7 +53,10 @@ export function formatMoney(
 ): string {
   const meta = currencyMeta(code)
   const { compact = false, sign = false } = opts
-  const decimals = opts.decimals ?? (compact ? 0 : meta.decimals)
+  // Crypto & metals hold value in small units (0.24 BTC, 3 oz) — never round
+  // those to whole numbers just because the display is compact.
+  const isSmallUnit = meta.kind === 'crypto' || meta.kind === 'metal'
+  const decimals = opts.decimals ?? (compact && !isSmallUnit ? 0 : meta.decimals)
 
   if (meta.kind === 'fiat') {
     try {

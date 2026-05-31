@@ -1,73 +1,50 @@
-# React + TypeScript + Vite
+# Money — a cozy home for your wealth
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A warm, minimal personal-finance app built around three ideas:
 
-Currently, two official plugins are available:
+- **Boxes** — the separate places your money lives (cash, accounts, assets, crypto),
+  each with its own currency and time-based **effects** like interest, appreciation,
+  or inflation.
+- **Flows** — expenses, income, and transfers, with a tactile recurring-rhythm control
+  instead of a checkbox.
+- **Planning** — a projection of where today's choices take your net worth, with a
+  scrubbable timeline, real-vs-nominal view, and milestones.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+No backend — everything lives in `localStorage`. The business logic is a pure,
+framework-free engine so a real API can drop in later.
 
-## React Compiler
+## Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Vite · React · TypeScript · Tailwind v4 · Radix UI · Zustand · Motion · d3 (shape/scale) · date-fns · Vitest
 
-## Expanding the ESLint configuration
+## Architecture
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+src/
+  domain/      pure engine — types, money, recurrence, effects, projection (+ tests)
+  store/       zustand store, localStorage persistence, seed data, selectors
+  ui/          Radix-wrapped, Tailwind-styled primitives
+  components/  app shell, navigation, page chrome
+  features/    overview · boxes · transactions · planning · settings
+  lib/         small utilities (dates, formatting, palette, hooks)
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The `domain/` folder imports nothing from React or the rest of the app. It is the
+single source of truth for how money grows, decays, recurs, and rolls up across
+currencies — and it is unit-tested in isolation.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Develop
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+pnpm install
+pnpm dev        # start the app
+pnpm test       # run the engine tests
+pnpm build      # type-check + production build
 ```
+
+## Design language
+
+Warm, minimal, dark, cozy — Claude/Notion-leaning. A warm near-black canvas with a
+soft radial glow, a serif display face (Fraunces) for numbers and headings, a clean
+humanist sans (Inter) for everything else, and motion that feels breathable rather
+than flashy.

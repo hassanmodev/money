@@ -187,8 +187,10 @@ export function project(state: FinanceState, opts: ProjectionOptions): Projectio
     perBoxBase[box.id] = series.map((v) => toBase(v, box.currency, settings))
   }
 
+  const infl = settings.inflation ?? 0
   const points: ProjectionPoint[] = sampleTimes.map((t, i) => {
     const years = Math.max(0, (t - fromT) / MS_PER_YEAR)
+    const globalDiscount = infl ? 1 / (1 + infl) ** years : 1
     const perBox: Record<string, number> = {}
     let nominal = 0
     let real = 0
@@ -198,7 +200,7 @@ export function project(state: FinanceState, opts: ProjectionOptions): Projectio
       nominal += v
       real += v * realDiscount(box.effects, years)
     }
-    return { date: sampleDates[i], t, nominal, real, perBox }
+    return { date: sampleDates[i], t, nominal, real: real * globalDiscount, perBox }
   })
 
   const currentNominal = points[0]?.nominal ?? 0
