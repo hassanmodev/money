@@ -1,4 +1,6 @@
 export * from './types'
+export * from './currencies'
+export * from './rates'
 export * from './money'
 export * from './recurrence'
 export * from './effects'

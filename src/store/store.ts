@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Box, Effect, FinanceState, Goal, Settings, Transaction } from '@/domain'
+import type { Box, CurrencyMeta, Effect, FinanceState, Goal, Settings, Transaction } from '@/domain'
+import { setCustomCurrencies } from '@/domain'
 import { newId } from '@/lib/id'
 import { todayISO } from '@/lib/date'
 import { createSeed } from './seed'
@@ -25,6 +26,11 @@ interface Actions {
 
   updateSettings: (patch: Partial<Settings>) => void
   setRate: (code: string, rate: number) => void
+
+  /** Add a brand-new currency or override a built-in one (matched by code). */
+  upsertCurrency: (meta: CurrencyMeta) => void
+  /** Remove a custom currency, or revert a built-in override to its default. */
+  removeCurrency: (code: string) => void
 
   resetAll: () => void
 }
@@ -99,7 +105,25 @@ export const useStore = create<Store>()(
       setRate: (code, rate) =>
         set((s) => ({ settings: { ...s.settings, rates: { ...s.settings.rates, [code]: rate } } })),
 
-      resetAll: () => set({ ...createSeed() }),
+      upsertCurrency: (meta) =>
+        set((s) => {
+          const rest = (s.settings.customCurrencies ?? []).filter((c) => c.code !== meta.code)
+          const customCurrencies = [...rest, meta]
+          setCustomCurrencies(customCurrencies)
+          return { settings: { ...s.settings, customCurrencies } }
+        }),
+      removeCurrency: (code) =>
+        set((s) => {
+          const customCurrencies = (s.settings.customCurrencies ?? []).filter((c) => c.code !== code)
+          setCustomCurrencies(customCurrencies)
+          return { settings: { ...s.settings, customCurrencies } }
+        }),
+
+      resetAll: () => {
+        const seed = createSeed()
+        setCustomCurrencies(seed.settings.customCurrencies)
+        return set({ ...seed })
+      },
     }),
     {
       name: 'cozy-money/v1',
@@ -111,6 +135,11 @@ export const useStore = create<Store>()(
         goals: s.goals,
         settings: s.settings,
       }),
+      // Fold the persisted custom currencies back into the live catalogue once
+      // storage rehydrates, so lookups/formatting see the user's edits.
+      onRehydrateStorage: () => (state) => {
+        setCustomCurrencies(state?.settings.customCurrencies)
+      },
     },
   ),
 )

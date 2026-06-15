@@ -9,7 +9,21 @@
 export type ISODate = string // 'YYYY-MM-DD'
 export type ISODateTime = string // full ISO timestamp
 
-export type CurrencyCode = string // 'EUR' | 'USD' | 'BTC' | 'XAU' | ...
+export type CurrencyCode = string // 'EUR' | 'USD' | 'EGP' | 'BTC' | 'XAU' | ...
+
+/** What a currency is, for iconography, decimals, and formatting. */
+export type CurrencyKind = 'fiat' | 'crypto' | 'metal' | 'custom'
+
+/** Display + precision metadata for a currency. Plain, serializable data. */
+export interface CurrencyMeta {
+  code: string
+  symbol: string
+  name: string
+  decimals: number
+  kind: CurrencyKind
+  /** surfaced first in pickers — the global majors plus a few locals */
+  popular?: boolean
+}
 
 /** The flavour of a money box. Affects iconography and sensible defaults. */
 export type BoxKind =
@@ -112,6 +126,12 @@ export interface Settings {
   rates: Record<CurrencyCode, number>
   /** global annual inflation used to discount the whole net worth in the "real" view */
   inflation?: number
+  /**
+   * User edits to the currency catalogue: brand-new custom currencies *and*
+   * overrides of built-in ones (matched by `code`). Merged over the JSON
+   * defaults to form the live catalogue.
+   */
+  customCurrencies?: CurrencyMeta[]
 }
 
 /** The whole persisted world. */

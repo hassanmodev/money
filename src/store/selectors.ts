@@ -1,8 +1,10 @@
 import { useMemo } from 'react'
 import {
   boxValueAt,
+  mergeCurrencies,
   netWorthAt,
   project,
+  type CurrencyMeta,
   type FinanceState,
   type ProjectionOptions,
   type ProjectionResult,
@@ -25,6 +27,12 @@ export function useFinanceState(): FinanceState {
 export function useActiveBoxes() {
   const boxes = useStore((s) => s.boxes)
   return useMemo(() => boxes.filter((b) => !b.archived), [boxes])
+}
+
+/** The live currency catalogue (defaults + the user's edits), in display order. */
+export function useCurrencies(): CurrencyMeta[] {
+  const custom = useStore((s) => s.settings.customCurrencies)
+  return useMemo(() => mergeCurrencies(custom), [custom])
 }
 
 export function useBox(id: string | undefined) {

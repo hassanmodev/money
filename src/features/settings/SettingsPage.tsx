@@ -1,17 +1,13 @@
-import { RotateCcw } from 'lucide-react'
+import { RefreshCw, RotateCcw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
-import { CURRENCIES, currencyMeta } from '@/domain'
+import { currencyMeta, marketRates } from '@/domain'
 import { fmtPercent } from '@/lib/format'
 import { useActiveBoxes } from '@/store/selectors'
 import { useStore } from '@/store/store'
-import { Button, Card, ConfirmDialog, Field, Input, Select, Slider } from '@/ui'
-
-const CURRENCY_OPTIONS = Object.values(CURRENCIES).map((c) => ({
-  value: c.code,
-  label: `${c.symbol}  ${c.code} · ${c.name}`,
-}))
+import { Button, Card, ConfirmDialog, CurrencyPicker, Field, Input, Slider } from '@/ui'
+import { CurrencyManager } from './CurrencyManager'
 
 export default function SettingsPage() {
   const settings = useStore((s) => s.settings)
@@ -30,14 +26,25 @@ export default function SettingsPage() {
     return [...set]
   }, [settings.rates, boxes, base])
 
-  const changeBase = (nb: string) => {
+  // Switching base re-pulls every rate from the bundled market data
+  // (rates_usd.json) against the new base. Codes the table doesn't cover are
+  // rebased arithmetically off their old value so they aren't lost.
+  const ratesFor = (nb: string): Record<string, number> => {
     const rateOf = (c: string) => (c === base ? 1 : (settings.rates[c] ?? 1))
     const denom = rateOf(nb) || 1
     const codes = new Set<string>([...Object.keys(settings.rates), base, nb, ...boxes.map((b) => b.currency)])
-    const rates: Record<string, number> = {}
-    for (const c of codes) rates[c] = rateOf(c) / denom
-    rates[nb] = 1
-    updateSettings({ baseCurrency: nb, rates })
+    const rebased: Record<string, number> = {}
+    for (const c of codes) rebased[c] = rateOf(c) / denom
+    return marketRates(nb, codes, rebased)
+  }
+
+  const changeBase = (nb: string) => {
+    updateSettings({ baseCurrency: nb, rates: ratesFor(nb) })
+  }
+
+  // Refresh every non-base rate from the market data without changing base.
+  const fillFromMarket = () => {
+    updateSettings({ rates: ratesFor(base) })
   }
 
   return (
@@ -47,7 +54,7 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-5">
         <Card className="flex flex-col gap-5 p-5 md:p-6">
           <Field label="Base currency" hint="Everything rolls up into this for your net worth.">
-            <Select value={base} onValueChange={changeBase} options={CURRENCY_OPTIONS} aria-label="Base currency" className="max-w-xs" />
+            <CurrencyPicker value={base} onChange={changeBase} aria-label="Base currency" className="max-w-xs" />
           </Field>
 
           <Field
@@ -62,10 +69,20 @@ export default function SettingsPage() {
         </Card>
 
         <Card className="p-5 md:p-6">
-          <h3 className="mb-1 font-serif text-lg text-ink">Exchange rates</h3>
-          <p className="mb-4 text-sm text-muted">
-            How much one unit is worth in {currencyMeta(base).name}.
-          </p>
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="mb-1 font-serif text-lg text-ink">Exchange rates</h3>
+              <p className="text-sm text-muted">
+                How much one unit is worth in {currencyMeta(base).name}.
+              </p>
+            </div>
+            {otherCurrencies.length > 0 && (
+              <Button variant="outline" onClick={fillFromMarket} className="shrink-0">
+                <RefreshCw className="size-4" />
+                Use market rates
+              </Button>
+            )}
+          </div>
           {otherCurrencies.length === 0 ? (
             <p className="text-sm text-faint">Everything is already in {base}.</p>
           ) : (
@@ -88,6 +105,8 @@ export default function SettingsPage() {
             </div>
           )}
         </Card>
+
+        <CurrencyManager />
 
         <Card className="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6">
           <div>

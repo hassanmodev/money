@@ -1,19 +1,14 @@
 import { Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { CURRENCIES, currencyMeta, type Box, type BoxKind, type Effect } from '@/domain'
+import { currencyMeta, type Box, type BoxKind, type Effect } from '@/domain'
 import { cn } from '@/lib/cn'
 import { SWATCHES } from '@/lib/palette'
 import { todayISO } from '@/lib/date'
 import { useStore } from '@/store/store'
-import { Button, ConfirmDialog, Field, Input, Select, Sheet, Textarea } from '@/ui'
+import { Button, ConfirmDialog, CurrencyPicker, Field, Input, Sheet, Textarea } from '@/ui'
 import { KIND_ICON, KIND_LABEL } from '@/ui/icons'
 import { EffectEditor } from './EffectEditor'
 import { BOX_KINDS } from './kinds'
-
-const CURRENCY_OPTIONS = Object.values(CURRENCIES).map((c) => ({
-  value: c.code,
-  label: `${c.symbol}  ${c.code} · ${c.name}`,
-}))
 
 function KindPicker({ value, onChange }: { value: BoxKind; onChange: (k: BoxKind) => void }) {
   return (
@@ -162,7 +157,7 @@ export function BoxEditor({
 
         <div className="grid grid-cols-2 gap-4">
           <Field label="Currency">
-            <Select value={currency} onValueChange={setCurrency} options={CURRENCY_OPTIONS} aria-label="Currency" />
+            <CurrencyPicker value={currency} onChange={setCurrency} aria-label="Currency" />
           </Field>
           <Field label="Opening balance">
             <div className="relative">

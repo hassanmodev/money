@@ -1,40 +1,6 @@
-/** Currency metadata, formatting, and conversion. Pure functions only. */
+/** Money formatting and conversion. Pure functions only. */
 import type { CurrencyCode, Settings } from './types'
-
-export interface CurrencyMeta {
-  code: string
-  symbol: string
-  name: string
-  decimals: number
-  kind: 'fiat' | 'crypto' | 'metal' | 'custom'
-}
-
-export const CURRENCIES: Record<string, CurrencyMeta> = {
-  EUR: { code: 'EUR', symbol: '€', name: 'Euro', decimals: 2, kind: 'fiat' },
-  USD: { code: 'USD', symbol: '$', name: 'US Dollar', decimals: 2, kind: 'fiat' },
-  GBP: { code: 'GBP', symbol: '£', name: 'British Pound', decimals: 2, kind: 'fiat' },
-  CHF: { code: 'CHF', symbol: 'Fr', name: 'Swiss Franc', decimals: 2, kind: 'fiat' },
-  JPY: { code: 'JPY', symbol: '¥', name: 'Japanese Yen', decimals: 0, kind: 'fiat' },
-  CAD: { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar', decimals: 2, kind: 'fiat' },
-  AUD: { code: 'AUD', symbol: 'A$', name: 'Australian Dollar', decimals: 2, kind: 'fiat' },
-  SEK: { code: 'SEK', symbol: 'kr', name: 'Swedish Krona', decimals: 2, kind: 'fiat' },
-  BTC: { code: 'BTC', symbol: '₿', name: 'Bitcoin', decimals: 6, kind: 'crypto' },
-  ETH: { code: 'ETH', symbol: 'Ξ', name: 'Ethereum', decimals: 4, kind: 'crypto' },
-  XAU: { code: 'XAU', symbol: 'oz', name: 'Gold (troy oz)', decimals: 3, kind: 'metal' },
-  XAG: { code: 'XAG', symbol: 'oz', name: 'Silver (troy oz)', decimals: 2, kind: 'metal' },
-}
-
-const GENERIC: CurrencyMeta = {
-  code: '?',
-  symbol: '¤',
-  name: 'Unit',
-  decimals: 2,
-  kind: 'custom',
-}
-
-export function currencyMeta(code: CurrencyCode): CurrencyMeta {
-  return CURRENCIES[code] ?? { ...GENERIC, code, symbol: code }
-}
+import { currencyMeta } from './currencies'
 
 export interface FormatOptions {
   /** drop fraction digits and use compact notation (1.2k, 3.4M) */
