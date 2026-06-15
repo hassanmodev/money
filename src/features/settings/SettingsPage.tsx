@@ -1,4 +1,4 @@
-import { RefreshCw, RotateCcw } from 'lucide-react'
+import { RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
@@ -14,8 +14,10 @@ export default function SettingsPage() {
   const updateSettings = useStore((s) => s.updateSettings)
   const setRate = useStore((s) => s.setRate)
   const resetAll = useStore((s) => s.resetAll)
+  const clearAll = useStore((s) => s.clearAll)
   const boxes = useActiveBoxes()
   const [confirmReset, setConfirmReset] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
 
   const base = settings.baseCurrency
   const inflation = settings.inflation ?? 0
@@ -110,20 +112,36 @@ export default function SettingsPage() {
 
         <Card className="flex flex-wrap items-center justify-between gap-4 p-5 md:p-6">
           <div>
-            <h3 className="font-serif text-lg text-ink">Demo data</h3>
-            <p className="text-sm text-muted">Restore the original sample boxes and transactions.</p>
+            <h3 className="font-serif text-lg text-ink">Your data</h3>
+            <p className="text-sm text-muted">Clear everything or restore the original sample boxes and transactions.</p>
           </div>
-          <Button variant="outline" onClick={() => setConfirmReset(true)}>
-            <RotateCcw className="size-4" />
-            Reset to demo
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button variant="danger" onClick={() => setConfirmClear(true)}>
+              <Trash2 className="size-4" />
+              Clear all
+            </Button>
+            <Button variant="outline" onClick={() => setConfirmReset(true)}>
+              <RotateCcw className="size-4" />
+              Reset to demo
+            </Button>
+          </div>
         </Card>
       </div>
 
       <ConfirmDialog
+        open={confirmClear}
+        onOpenChange={setConfirmClear}
+        title="Clear everything?"
+        description="This removes all boxes, transactions, goals, and custom currencies, and resets settings to defaults. This can't be undone."
+        confirmLabel="Clear all"
+        danger
+        onConfirm={clearAll}
+      />
+
+      <ConfirmDialog
         open={confirmReset}
         onOpenChange={setConfirmReset}
-        title="Reset everything?"
+        title="Reset to demo?"
         description="This replaces all your boxes and transactions with the original demo data. This can't be undone."
         confirmLabel="Reset to demo"
         danger

@@ -4,7 +4,7 @@ import type { Box, CurrencyMeta, Effect, FinanceState, Goal, Settings, Transacti
 import { setCustomCurrencies } from '@/domain'
 import { newId } from '@/lib/id'
 import { todayISO } from '@/lib/date'
-import { createSeed } from './seed'
+import { createEmpty, createSeed } from './seed'
 
 type NewBox = Omit<Box, 'id' | 'createdAt'>
 type NewTransaction = Omit<Transaction, 'id' | 'createdAt'>
@@ -33,6 +33,7 @@ interface Actions {
   removeCurrency: (code: string) => void
 
   resetAll: () => void
+  clearAll: () => void
 }
 
 export type Store = FinanceState & Actions
@@ -123,6 +124,12 @@ export const useStore = create<Store>()(
         const seed = createSeed()
         setCustomCurrencies(seed.settings.customCurrencies)
         return set({ ...seed })
+      },
+
+      clearAll: () => {
+        const empty = createEmpty()
+        setCustomCurrencies(empty.settings.customCurrencies)
+        return set({ ...empty })
       },
     }),
     {

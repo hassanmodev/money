@@ -3,6 +3,20 @@ import type { FinanceState } from '@/domain'
 
 const CREATED = '2025-09-01T10:00:00.000Z'
 
+/** Blank slate — no boxes, transactions, or goals; default settings only. */
+export function createEmpty(): FinanceState {
+  return {
+    settings: {
+      baseCurrency: 'EUR',
+      rates: { EUR: 1 },
+      inflation: 0,
+    },
+    goals: [],
+    boxes: [],
+    transactions: [],
+  }
+}
+
 /** A fresh copy of the starter world (never share references with the store). */
 export function createSeed(): FinanceState {
   return {
