@@ -13,14 +13,24 @@ import { useBaseCurrency } from '@/ui'
 
 const morph = { type: 'spring' as const, stiffness: 130, damping: 26, mass: 0.9 }
 
+/** A what-if scenario line drawn over the baseline; `values` align with result.points. */
+export interface Overlay {
+  id: string
+  name: string
+  color: string
+  values: number[]
+}
+
 export function ProjectionChart({
   result,
   boxes,
   mode,
+  overlays = [],
 }: {
   result: ProjectionResult
   boxes: Box[]
   mode: 'nominal' | 'real'
+  overlays?: Overlay[]
 }) {
   const { ref, width } = useElementWidth()
   const mobile = useIsMobile()
@@ -63,8 +73,12 @@ export function ProjectionChart({
   const x = scaleTime()
     .domain([P[0].t, P[n - 1].t])
     .range([padL, width - padR])
-  const yMax = Math.max(...P.map((p) => Math.max(p.nominal, p.real))) * 1.08 || 1
-  const yMin = Math.min(0, ...activeTop, ...ghostTop)
+  // overlays whose sample count matches the baseline (same projection options)
+  const oks = overlays.filter((o) => o.values.length === n)
+  const oFlat = oks.flatMap((o) => o.values)
+  const yMax =
+    Math.max(...P.map((p) => Math.max(p.nominal, p.real)), ...oFlat) * 1.08 || 1
+  const yMin = Math.min(0, ...activeTop, ...ghostTop, ...oFlat)
   const y = scaleLinear().domain([yMin, yMax]).range([H - padB, padT])
 
   const mkArea = (lo: number[], hi: number[]) =>
@@ -156,6 +170,24 @@ export function ProjectionChart({
           opacity={0.6}
         />
 
+        {/* scenario overlays */}
+        {oks.map((o) => (
+          <g key={o.id}>
+            <motion.path
+              initial={false}
+              animate={{ d: mkLine(o.values) }}
+              transition={morph}
+              fill="none"
+              stroke={o.color}
+              strokeWidth={1.75}
+              strokeDasharray="5 4"
+              strokeLinecap="round"
+              opacity={0.95}
+            />
+            <circle cx={x(P[n - 1].t)} cy={y(o.values[n - 1])} r={3} fill={o.color} />
+          </g>
+        ))}
+
         {/* active total line */}
         <motion.path
           initial={false}
@@ -227,6 +259,25 @@ export function ProjectionChart({
                 </div>
               ))}
           </div>
+          {oks.length > 0 && (
+            <div className="mt-2 flex flex-col gap-1 border-t border-line pt-2">
+              {oks.map((o) => {
+                const d = o.values[hi] - activeTop[hi]
+                return (
+                  <div key={o.id} className="flex items-center gap-2 text-xs">
+                    <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: o.color }} />
+                    <span className="flex-1 truncate text-muted">{o.name}</span>
+                    <span className="tabular text-faint">
+                      {formatMoney(o.values[hi], base, { compact: true })}
+                    </span>
+                    <span className={d >= 0 ? 'tabular text-sage' : 'tabular text-rust'}>
+                      {formatMoney(d, base, { compact: true, sign: true })}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </motion.div>
         )}
       </AnimatePresence>
