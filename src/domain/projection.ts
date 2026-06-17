@@ -1,13 +1,19 @@
 /**
  * The projection engine — pure, deterministic, framework-free.
  *
- * Given the world (boxes, their effects, and the stream of transactions) it
- * simulates each box forward through time and rolls everything up into a
- * net-worth trajectory in the base currency, tracking both the nominal number
- * and its inflation-adjusted (real) shadow.
+ * Given the world (boxes, their effects and forwarding rules, and the stream of
+ * transactions) it steps every box forward through time *together* — because
+ * forwarding couples them — and rolls the result into a net-worth trajectory in
+ * the base currency, tracking both the nominal number and its inflation-adjusted
+ * (real) shadow.
+ *
+ * The heavy lifting lives in {@link FlowNetwork}: this module turns the world
+ * into a sorted stream of events (a box opening, money leaving, money arriving)
+ * and a set of sample times, then walks the network through them.
  */
 import { format, parseISO } from 'date-fns'
-import { nominalFactor, realDiscount } from './effects'
+import { realDiscount } from './effects'
+import { FlowNetwork } from './flow'
 import { toBase, convert } from './money'
 import { occurrencesBetween } from './recurrence'
 import type {
@@ -66,11 +72,6 @@ interface Occurrence {
   currency: CurrencyCode
 }
 
-interface Delta {
-  t: number
-  delta: number // in the box's own currency
-}
-
 /** Expand one transaction into concrete dated occurrences within [from, to]. */
 function expand(tx: Transaction, from: ISODate, to: ISODate): Occurrence[] {
   const dates = tx.recurrence
@@ -88,51 +89,84 @@ function expand(tx: Transaction, from: ISODate, to: ISODate): Occurrence[] {
   }))
 }
 
-/** Signed cash movements touching a single box, in that box's currency, sorted. */
-function boxDeltas(box: Box, occ: Occurrence[], s: Settings): Delta[] {
-  const out: Delta[] = []
-  const inBox = (amt: number, cur: CurrencyCode) => convert(amt, cur, box.currency, s)
-  for (const o of occ) {
-    if (o.kind === 'expense' && o.boxId === box.id) {
-      out.push({ t: o.t, delta: -inBox(o.amount, o.currency) })
-    } else if (o.kind === 'income' && o.boxId === box.id) {
-      out.push({ t: o.t, delta: inBox(o.amount, o.currency) })
-    } else if (o.kind === 'transfer') {
-      if (o.boxId === box.id) out.push({ t: o.t, delta: -inBox(o.amount, o.currency) })
-      if (o.toBoxId === box.id) out.push({ t: o.t, delta: inBox(o.amount, o.currency) })
-    }
-  }
-  out.sort((a, b) => a.t - b.t)
-  return out
-}
+// Same-instant ordering: a box opens, then money leaves, then money arrives —
+// so an inflow sees the up-to-date balance its acceptance curve depends on.
+type SimEvent =
+  | { t: number; ord: 0; kind: 'open'; id: string }
+  | { t: number; ord: 1; kind: 'out'; id: string; amount: number }
+  | { t: number; ord: 2; kind: 'in'; id: string; amount: number }
+  | { t: number; ord: 3; kind: 'sample'; index: number }
 
 /**
- * Nominal value of a box at each (ascending) sample time. Walks from the
- * opening balance, compounding effects between events and applying each cash
- * movement as it lands.
+ * Walk `boxes` through time and record each box's value (its own currency) at
+ * every sample time. Inflows are *deposited* into the network so they cascade
+ * through forwards; outflows are plain withdrawals.
  */
-function nominalSeries(box: Box, deltas: Delta[], sampleTimes: number[]): number[] {
-  const openT = parseISO(box.openingDate).getTime()
-  let value = box.openingBalance
-  let lastT = openT
-  let di = 0
-  const out: number[] = []
+function simulate(
+  boxes: Box[],
+  transactions: Transaction[],
+  settings: Settings,
+  sampleTimes: number[],
+): Record<string, number[]> {
+  const byId = new Map(boxes.map((b) => [b.id, b]))
+  const inBox = (amount: number, from: CurrencyCode, to: CurrencyCode) =>
+    convert(amount, from, to, settings)
 
-  for (const sT of sampleTimes) {
-    while (di < deltas.length && deltas[di].t <= sT) {
-      const dT = deltas[di].t
-      if (dT > lastT) {
-        value *= nominalFactor(box.effects, (dT - lastT) / MS_PER_YEAR)
-        lastT = dT
+  // Expand transactions from the earliest opening (to capture past flows that
+  // shape today's balances) through the last sample.
+  const firstSample = sampleTimes[0] ?? 0
+  const lastSample = sampleTimes[sampleTimes.length - 1] ?? firstSample
+  const earliestOpen = boxes.reduce(
+    (m, b) => Math.min(m, parseISO(b.openingDate).getTime()),
+    firstSample,
+  )
+  const fromISO = iso(Math.min(earliestOpen, firstSample))
+  const toISO = iso(lastSample)
+  const occ = transactions.flatMap((tx) => expand(tx, fromISO, toISO))
+
+  const events: SimEvent[] = []
+  for (const b of boxes) {
+    events.push({ t: parseISO(b.openingDate).getTime(), ord: 0, kind: 'open', id: b.id })
+  }
+  for (const o of occ) {
+    const src = byId.get(o.boxId)
+    if ((o.kind === 'expense' || o.kind === 'transfer') && src) {
+      events.push({ t: o.t, ord: 1, kind: 'out', id: src.id, amount: inBox(o.amount, o.currency, src.currency) })
+    }
+    if (o.kind === 'income' && src) {
+      events.push({ t: o.t, ord: 2, kind: 'in', id: src.id, amount: inBox(o.amount, o.currency, src.currency) })
+    }
+    if (o.kind === 'transfer' && o.toBoxId) {
+      const dst = byId.get(o.toBoxId)
+      if (dst) events.push({ t: o.t, ord: 2, kind: 'in', id: dst.id, amount: inBox(o.amount, o.currency, dst.currency) })
+    }
+  }
+  sampleTimes.forEach((t, index) => events.push({ t, ord: 3, kind: 'sample', index }))
+
+  events.sort((a, b) => a.t - b.t || a.ord - b.ord)
+
+  const net = new FlowNetwork(boxes, settings)
+  const out: Record<string, number[]> = {}
+  for (const b of boxes) out[b.id] = new Array(sampleTimes.length).fill(0)
+
+  for (const ev of events) {
+    net.setClock(ev.t)
+    switch (ev.kind) {
+      case 'open':
+        net.open(ev.id)
+        break
+      case 'out':
+        net.withdraw(ev.id, ev.amount)
+        break
+      case 'in':
+        net.deposit(ev.id, ev.amount)
+        break
+      case 'sample': {
+        const snap = net.snapshot()
+        for (const b of boxes) out[b.id][ev.index] = snap[b.id]
+        break
       }
-      value += deltas[di].delta
-      di++
     }
-    if (sT > lastT) {
-      value *= nominalFactor(box.effects, (sT - lastT) / MS_PER_YEAR)
-      lastT = sT
-    }
-    out.push(value)
   }
   return out
 }
@@ -172,19 +206,10 @@ export function project(state: FinanceState, opts: ProjectionOptions): Projectio
   )
   const sampleDates = sampleTimes.map(iso)
 
-  // Expand transactions from the earliest opening (to capture past flows that
-  // shape today's balances) all the way to the horizon.
-  const earliestOpen = active.reduce(
-    (m, b) => Math.min(m, parseISO(b.openingDate).getTime()),
-    fromT,
-  )
-  const expandFrom = iso(Math.min(earliestOpen, fromT))
-  const occ = state.transactions.flatMap((tx) => expand(tx, expandFrom, opts.to))
-
+  const series = simulate(active, state.transactions, settings, sampleTimes)
   const perBoxBase: Record<string, number[]> = {}
   for (const box of active) {
-    const series = nominalSeries(box, boxDeltas(box, occ, settings), sampleTimes)
-    perBoxBase[box.id] = series.map((v) => toBase(v, box.currency, settings))
+    perBoxBase[box.id] = series[box.id].map((v) => toBase(v, box.currency, settings))
   }
 
   const infl = settings.inflation ?? 0
@@ -216,28 +241,32 @@ export function project(state: FinanceState, opts: ProjectionOptions): Projectio
   }
 }
 
-/** Nominal value of a single box on a given date, in the box's own currency. */
+/**
+ * Nominal value of a single box on a date, in the box's own currency.
+ *
+ * Runs the whole active network (forwarding makes a box's balance depend on its
+ * neighbours), then reads off the one box. If the box is archived it's projected
+ * on its own.
+ */
 export function boxValueAt(
-  box: Box,
-  transactions: Transaction[],
-  settings: Settings,
+  state: FinanceState,
+  boxId: string,
   dateISO: ISODate,
 ): number {
-  const occ = transactions.flatMap((tx) => expand(tx, box.openingDate, dateISO))
-  const [v] = nominalSeries(box, boxDeltas(box, occ, settings), [
-    parseISO(dateISO).getTime(),
-  ])
-  return v
+  const active = state.boxes.filter((b) => !b.archived)
+  const boxes = active.some((b) => b.id === boxId)
+    ? active
+    : state.boxes.filter((b) => b.id === boxId)
+  const series = simulate(boxes, state.transactions, state.settings, [parseISO(dateISO).getTime()])
+  return series[boxId]?.[0] ?? 0
 }
 
 /** Total net worth on a date, in the base currency. */
 export function netWorthAt(state: FinanceState, dateISO: ISODate): number {
-  return state.boxes
-    .filter((b) => !b.archived)
-    .reduce(
-      (sum, b) =>
-        sum +
-        toBase(boxValueAt(b, state.transactions, state.settings, dateISO), b.currency, state.settings),
-      0,
-    )
+  const active = state.boxes.filter((b) => !b.archived)
+  const series = simulate(active, state.transactions, state.settings, [parseISO(dateISO).getTime()])
+  return active.reduce(
+    (sum, b) => sum + toBase(series[b.id][0], b.currency, state.settings),
+    0,
+  )
 }

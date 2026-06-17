@@ -1,6 +1,13 @@
 import { Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { currencyMeta, type Box, type BoxKind, type Effect } from '@/domain'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  currencyMeta,
+  type AcceptancePoint,
+  type Box,
+  type BoxKind,
+  type Effect,
+  type Forward,
+} from '@/domain'
 import { cn } from '@/lib/cn'
 import { SWATCHES } from '@/lib/palette'
 import { todayISO } from '@/lib/date'
@@ -8,6 +15,7 @@ import { useStore } from '@/store/store'
 import { Button, ConfirmDialog, CurrencyPicker, Field, Input, Sheet, Textarea } from '@/ui'
 import { KIND_ICON, KIND_LABEL } from '@/ui/icons'
 import { EffectEditor } from './EffectEditor'
+import { FlowEditor } from './FlowEditor'
 import { BOX_KINDS } from './kinds'
 
 function KindPicker({ value, onChange }: { value: BoxKind; onChange: (k: BoxKind) => void }) {
@@ -71,6 +79,7 @@ export function BoxEditor({
   const addBox = useStore((s) => s.addBox)
   const updateBox = useStore((s) => s.updateBox)
   const removeBox = useStore((s) => s.removeBox)
+  const allBoxes = useStore((s) => s.boxes)
 
   const [name, setName] = useState(box?.name ?? '')
   const [kind, setKind] = useState<BoxKind>(box?.kind ?? 'checking')
@@ -80,6 +89,8 @@ export function BoxEditor({
   const [color, setColor] = useState(box?.color ?? SWATCHES[0].hex)
   const [note, setNote] = useState(box?.note ?? '')
   const [effects, setEffects] = useState<Effect[]>(box?.effects ?? [])
+  const [acceptance, setAcceptance] = useState<AcceptancePoint[]>(box?.acceptance ?? [])
+  const [forwards, setForwards] = useState<Forward[]>(box?.forwards ?? [])
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   // Reset the form to reflect the target box each time the sheet opens.
@@ -93,12 +104,20 @@ export function BoxEditor({
     setColor(box?.color ?? SWATCHES[0].hex)
     setNote(box?.note ?? '')
     setEffects(box?.effects ?? [])
+    setAcceptance(box?.acceptance ?? [])
+    setForwards(box?.forwards ?? [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, box])
 
   const symbol = currencyMeta(currency).symbol
+  // Boxes this one can spill into — everything live except itself.
+  const targets = useMemo(
+    () => allBoxes.filter((b) => b.id !== box?.id && !b.archived),
+    [allBoxes, box?.id],
+  )
 
   const save = () => {
+    const cleanForwards = forwards.filter((f) => f.toBoxId && f.share > 0)
     const data = {
       name: name.trim() || 'Untitled box',
       kind,
@@ -108,6 +127,8 @@ export function BoxEditor({
       color,
       note: note.trim() || undefined,
       effects,
+      acceptance: acceptance.length ? acceptance : undefined,
+      forwards: cleanForwards.length ? cleanForwards : undefined,
       icon: box?.icon,
     }
     if (box) updateBox(box.id, data)
@@ -193,6 +214,21 @@ export function BoxEditor({
           hint="Rules that bend this box's value over time — interest, inflation, and the like."
         >
           <EffectEditor value={effects} onChange={setEffects} />
+        </Field>
+
+        <Field
+          label="Spillover"
+          hint="Keep only part of what flows in, and pass the rest on to other boxes."
+        >
+          <FlowEditor
+            acceptance={acceptance}
+            onAcceptanceChange={setAcceptance}
+            forwards={forwards}
+            onForwardsChange={setForwards}
+            currency={currency}
+            color={color}
+            targets={targets}
+          />
         </Field>
 
         <Field label="Note">

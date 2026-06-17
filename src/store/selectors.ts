@@ -49,12 +49,8 @@ export function useNetWorth(dateISO?: string): number {
 /** A single box's value in its own currency on a date (default today). */
 export function useBoxValue(boxId: string, dateISO?: string): number {
   const state = useFinanceState()
-  const box = state.boxes.find((b) => b.id === boxId)
   const date = dateISO ?? todayISO()
-  return useMemo(
-    () => (box ? boxValueAt(box, state.transactions, state.settings, date) : 0),
-    [box, state.transactions, state.settings, date],
-  )
+  return useMemo(() => boxValueAt(state, boxId, date), [state, boxId, date])
 }
 
 /** The full forward projection over a horizon, recomputed when inputs change. */

@@ -99,10 +99,11 @@ describe('transfers', () => {
       date: '2026-03-01',
       createdAt: '2026-01-01T00:00:00Z',
     }
-    const value = netWorthAt(state([eur, usd], [tx]), '2026-06-01')
+    const world = state([eur, usd], [tx])
+    const value = netWorthAt(world, '2026-06-01')
     expect(value).toBeCloseTo(1000, 6) // value is conserved across the transfer
     // the USD box now holds 100 USD (= 90 EUR at rate 0.9)
-    expect(boxValueAt(usd, [tx], settings, '2026-06-01')).toBeCloseTo(100, 6)
+    expect(boxValueAt(world, usd.id, '2026-06-01')).toBeCloseTo(100, 6)
   })
 })
 
@@ -128,6 +129,55 @@ describe('inflation (real vs nominal)', () => {
     )
     expect(r.endNominal).toBeCloseTo(1000, 6)
     expect(r.endReal).toBeCloseTo(1000 / 1.03 ** 4, 4) // ≈ 888.49
+  })
+})
+
+describe('forwarding', () => {
+  it('spills a share of inflow on to another box, conserving net worth', () => {
+    // checking keeps 50% of what arrives and forwards the rest to savings
+    const checking = box({
+      id: 'chk',
+      openingBalance: 0,
+      acceptance: [{ level: 0, rate: 0.5 }],
+      forwards: [{ id: 'f1', toBoxId: 'sav', share: 1 }],
+    })
+    const savings = box({ id: 'sav', openingBalance: 0 })
+    const income: Transaction = {
+      id: 'inc',
+      kind: 'income',
+      boxId: 'chk',
+      amount: 1000,
+      currency: 'EUR',
+      date: '2026-01-15',
+      createdAt: '2026-01-01T00:00:00Z',
+    }
+    const world = state([checking, savings], [income])
+    expect(boxValueAt(world, 'chk', '2026-02-01')).toBeCloseTo(500, 6)
+    expect(boxValueAt(world, 'sav', '2026-02-01')).toBeCloseTo(500, 6)
+    expect(netWorthAt(world, '2026-02-01')).toBeCloseTo(1000, 6) // nothing lost
+  })
+
+  it('caps a box and overflows the surplus', () => {
+    // checking holds at most 1000, the rest spills to savings
+    const checking = box({
+      id: 'chk',
+      openingBalance: 0,
+      acceptance: [{ level: 1000, rate: 0 }],
+      forwards: [{ id: 'f1', toBoxId: 'sav', share: 1 }],
+    })
+    const savings = box({ id: 'sav', openingBalance: 0 })
+    const income: Transaction = {
+      id: 'inc',
+      kind: 'income',
+      boxId: 'chk',
+      amount: 2500,
+      currency: 'EUR',
+      date: '2026-01-15',
+      createdAt: '2026-01-01T00:00:00Z',
+    }
+    const world = state([checking, savings], [income])
+    expect(boxValueAt(world, 'chk', '2026-02-01')).toBeCloseTo(1000, 6)
+    expect(boxValueAt(world, 'sav', '2026-02-01')).toBeCloseTo(1500, 6)
   })
 })
 

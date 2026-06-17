@@ -56,6 +56,10 @@ export function createSeed(): FinanceState {
         color: '#d4845c',
         icon: 'Wallet',
         effects: [],
+        // Keep a €5k float; sweep anything above it into the rainy-day fund,
+        // where it actually earns interest.
+        acceptance: [{ level: 5000, rate: 0 }],
+        forwards: [{ id: 'fwd-checking-savings', toBoxId: 'box-savings', share: 1 }],
         createdAt: CREATED,
       },
       {

@@ -66,6 +66,28 @@ export interface Effect {
   compounding: Compounding
 }
 
+/**
+ * One tier of a box's acceptance curve. Read as: "once this box holds `level`
+ * (in its own currency), it keeps only `rate` of any further inflow." Points
+ * stack into a tank that fills greedily while low and tapers as it crosses each
+ * threshold. Below the first point a box keeps everything (rate 1).
+ */
+export interface AcceptancePoint {
+  level: number // balance threshold, box currency, >= 0
+  rate: number // fraction kept from here up, 0..1
+}
+
+/**
+ * A directed spill: a `share` of a box's overflow (the inflow it declines)
+ * routed on to another box. Shares are absolute fractions of the overflow;
+ * what isn't forwarded stays put. Money is conserved either way.
+ */
+export interface Forward {
+  id: string
+  toBoxId: string
+  share: number // 0..1
+}
+
 export interface Box {
   id: string
   name: string
@@ -76,6 +98,16 @@ export interface Box {
   color: string // hex from the curated swatch palette
   icon?: string // optional lucide icon name override
   effects: Effect[]
+  /**
+   * Tiered take-rate for incoming money, ascending by level. Absent or empty
+   * means the box keeps everything it's offered.
+   */
+  acceptance?: AcceptancePoint[]
+  /**
+   * Where this box spills the inflow it declines. Absent or empty means the box
+   * simply keeps whatever its acceptance curve leaves over.
+   */
+  forwards?: Forward[]
   note?: string
   archived?: boolean
   createdAt: ISODateTime

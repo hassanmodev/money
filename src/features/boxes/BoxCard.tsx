@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowUpRight, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { ArrowDownRight, ArrowRight, ArrowUpRight, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toBase, type Box, type Effect } from '@/domain'
 import { cn } from '@/lib/cn'
@@ -35,6 +35,7 @@ function EffectChip({ effect }: { effect: Effect }) {
 export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
   const settings = useStore((s) => s.settings)
   const removeBox = useStore((s) => s.removeBox)
+  const boxes = useStore((s) => s.boxes)
   const value = useBoxValue(box.id)
   const series = useBoxSeries(box)
   const [confirm, setConfirm] = useState(false)
@@ -42,6 +43,10 @@ export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
   const Icon = boxIcon(box)
   const baseValue = toBase(value, box.currency, settings)
   const showBase = box.currency !== settings.baseCurrency
+
+  const forwardTargets = (box.forwards ?? [])
+    .map((f) => boxes.find((b) => b.id === f.toBoxId))
+    .filter((b): b is Box => !!b && !b.archived)
 
   return (
     <>
@@ -106,10 +111,16 @@ export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
 
         <Sparkline data={series} color={box.color} width={320} height={40} className="w-full" />
 
-        {box.effects.length > 0 && (
+        {(box.effects.length > 0 || forwardTargets.length > 0) && (
           <div className="flex flex-wrap gap-1.5">
             {box.effects.map((e) => (
               <EffectChip key={e.id} effect={e} />
+            ))}
+            {forwardTargets.map((t) => (
+              <Chip key={t.id} className="gap-1" style={{ color: t.color }}>
+                <ArrowRight className="size-3" />
+                {t.name}
+              </Chip>
             ))}
           </div>
         )}
