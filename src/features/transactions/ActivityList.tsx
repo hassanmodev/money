@@ -1,4 +1,4 @@
-import { MoreHorizontal, Repeat, Trash2 } from 'lucide-react'
+import { MoreHorizontal, Pencil, Repeat, Trash2 } from 'lucide-react'
 import { useMemo } from 'react'
 import { cadenceLabel, formatMoney, type Transaction } from '@/domain'
 import { cn } from '@/lib/cn'
@@ -6,6 +6,7 @@ import { fmtDateShort, relativeDay } from '@/lib/date'
 import { useStore } from '@/store/store'
 import { Button, Chip, Menu, MenuItem } from '@/ui'
 import { categoryOf } from './categories'
+import { useComposer } from './ComposerProvider'
 
 const KIND_COLOR: Record<Transaction['kind'], string> = {
   expense: 'text-rust',
@@ -16,6 +17,7 @@ const KIND_COLOR: Record<Transaction['kind'], string> = {
 function TransactionRow({ tx }: { tx: Transaction }) {
   const boxes = useStore((s) => s.boxes)
   const removeTransaction = useStore((s) => s.removeTransaction)
+  const composer = useComposer()
   const cat = categoryOf(tx.category)
   const Icon = cat.icon
   const fromBox = boxes.find((b) => b.id === tx.boxId)
@@ -69,6 +71,9 @@ function TransactionRow({ tx }: { tx: Transaction }) {
           </Button>
         }
       >
+        <MenuItem icon={Pencil} onSelect={() => composer.edit(tx)}>
+          Edit
+        </MenuItem>
         <MenuItem icon={Trash2} danger onSelect={() => removeTransaction(tx.id)}>
           Delete
         </MenuItem>

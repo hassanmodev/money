@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { currencyMeta, type Recurrence, type TxKind } from '@/domain'
+import { currencyMeta, type Recurrence, type Transaction, type TxKind } from '@/domain'
 import { cn } from '@/lib/cn'
 import { todayISO } from '@/lib/date'
 import { useActiveBoxes } from '@/store/selectors'
@@ -60,13 +60,16 @@ export function AddTransaction({
   open,
   onOpenChange,
   prefill,
+  editing,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   prefill: ComposerPrefill
+  editing?: Transaction | null
 }) {
   const boxes = useActiveBoxes()
   const addTransaction = useStore((s) => s.addTransaction)
+  const updateTransaction = useStore((s) => s.updateTransaction)
 
   const [kind, setKind] = useState<TxKind>('expense')
   const [boxId, setBoxId] = useState('')
@@ -79,6 +82,17 @@ export function AddTransaction({
 
   useEffect(() => {
     if (!open) return
+    if (editing) {
+      setKind(editing.kind)
+      setBoxId(editing.boxId)
+      setToBoxId(editing.toBoxId ?? boxes.find((b) => b.id !== editing.boxId)?.id ?? '')
+      setAmountStr(String(editing.amount))
+      setCategory(editing.category ?? 'groceries')
+      setNote(editing.note ?? '')
+      setDate(editing.date)
+      setRecurrence(editing.recurrence ?? null)
+      return
+    }
     const first = prefill.boxId ?? boxes[0]?.id ?? ''
     const second = boxes.find((b) => b.id !== first)?.id ?? ''
     setKind(prefill.kind ?? 'expense')
@@ -107,7 +121,7 @@ export function AddTransaction({
 
   const save = () => {
     if (!valid) return
-    addTransaction({
+    const fields = {
       kind,
       boxId,
       toBoxId: kind === 'transfer' ? toBoxId : undefined,
@@ -117,11 +131,20 @@ export function AddTransaction({
       note: note.trim() || undefined,
       date,
       recurrence: recurrence ? { ...recurrence, anchor: date } : undefined,
-    })
+    }
+    if (editing) updateTransaction(editing.id, fields)
+    else addTransaction(fields)
     onOpenChange(false)
   }
 
-  const title = kind === 'expense' ? 'New expense' : kind === 'income' ? 'New income' : 'New transfer'
+  const noun = kind === 'expense' ? 'expense' : kind === 'income' ? 'income' : 'transfer'
+  const title = editing
+    ? `Edit ${noun}`
+    : kind === 'expense'
+      ? 'New expense'
+      : kind === 'income'
+        ? 'New income'
+        : 'New transfer'
 
   return (
     <Sheet
@@ -134,7 +157,7 @@ export function AddTransaction({
             Cancel
           </Button>
           <Button onClick={save} disabled={!valid}>
-            Add {kind}
+            {editing ? 'Save changes' : `Add ${kind}`}
           </Button>
         </>
       }

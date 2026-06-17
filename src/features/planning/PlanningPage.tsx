@@ -41,7 +41,7 @@ export default function PlanningPage() {
   const boxes = useActiveBoxes()
   const updateTransaction = useStore((s) => s.updateTransaction)
 
-  const [months, setMonths] = useState(60)
+  const [months, setMonths] = useState(12)
   const [mode, setMode] = useState<'nominal' | 'real'>('nominal')
 
   const from = todayISO()
