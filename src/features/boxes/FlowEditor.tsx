@@ -252,8 +252,20 @@ export function FlowEditor({
     if (!targets.length) return
     onForwardsChange([...forwards, { id: newId('fwd'), toBoxId: targets[0].id, share: 0.5 }])
   }
-  const setForward = (id: string, patch: Partial<Forward>) =>
+  const setForward = (id: string, patch: Partial<Forward>) => {
+    // Dragging one share squeezes the others so the routed total stays ≤ 100%.
+    if (patch.share !== undefined) {
+      const share = Math.max(0, Math.min(1, patch.share))
+      const otherSum = forwards.reduce((s, f) => (f.id === id ? s : s + (f.share || 0)), 0)
+      const budget = 1 - share
+      const scale = otherSum > budget && otherSum > 0 ? budget / otherSum : 1
+      onForwardsChange(
+        forwards.map((f) => (f.id === id ? { ...f, share } : { ...f, share: (f.share || 0) * scale })),
+      )
+      return
+    }
     onForwardsChange(forwards.map((f) => (f.id === id ? { ...f, ...patch } : f)))
+  }
   const removeForward = (id: string) => onForwardsChange(forwards.filter((f) => f.id !== id))
 
   const showPreview = acceptance.length > 0 && !keepsEverything

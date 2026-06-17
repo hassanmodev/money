@@ -80,10 +80,11 @@ export function BoxEditor({
   const updateBox = useStore((s) => s.updateBox)
   const removeBox = useStore((s) => s.removeBox)
   const allBoxes = useStore((s) => s.boxes)
+  const baseCurrency = useStore((s) => s.settings.baseCurrency)
 
   const [name, setName] = useState(box?.name ?? '')
   const [kind, setKind] = useState<BoxKind>(box?.kind ?? 'checking')
-  const [currency, setCurrency] = useState(box?.currency ?? 'EUR')
+  const [currency, setCurrency] = useState(box?.currency ?? baseCurrency)
   const [balanceStr, setBalanceStr] = useState(String(box?.openingBalance ?? ''))
   const [openingDate, setOpeningDate] = useState(box?.openingDate ?? todayISO())
   const [color, setColor] = useState(box?.color ?? SWATCHES[0].hex)
@@ -98,7 +99,7 @@ export function BoxEditor({
     if (!open) return
     setName(box?.name ?? '')
     setKind(box?.kind ?? 'checking')
-    setCurrency(box?.currency ?? 'EUR')
+    setCurrency(box?.currency ?? baseCurrency)
     setBalanceStr(String(box?.openingBalance ?? ''))
     setOpeningDate(box?.openingDate ?? todayISO())
     setColor(box?.color ?? SWATCHES[0].hex)

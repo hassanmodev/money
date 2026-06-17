@@ -50,7 +50,11 @@ export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
 
   return (
     <>
-      <Card interactive onClick={onEdit} className="relative flex flex-col gap-4 overflow-hidden p-5">
+      <Card
+        interactive
+        onClick={onEdit}
+        className="relative flex h-full flex-col gap-4 overflow-hidden p-5"
+      >
         <div
           aria-hidden
           className="pointer-events-none absolute -right-10 -top-10 size-32 rounded-full blur-2xl"
@@ -111,19 +115,19 @@ export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
 
         <Sparkline data={series} color={box.color} width={320} height={40} className="w-full" />
 
-        {(box.effects.length > 0 || forwardTargets.length > 0) && (
-          <div className="flex flex-wrap gap-1.5">
-            {box.effects.map((e) => (
-              <EffectChip key={e.id} effect={e} />
-            ))}
-            {forwardTargets.map((t) => (
-              <Chip key={t.id} className="gap-1" style={{ color: t.color }}>
-                <ArrowRight className="size-3" />
-                {t.name}
-              </Chip>
-            ))}
-          </div>
-        )}
+        {/* Always reserve the footer row so cards stay the same height whether or
+            not they carry effect/forward chips. */}
+        <div className="mt-auto flex min-h-[1.625rem] flex-wrap gap-1.5">
+          {box.effects.map((e) => (
+            <EffectChip key={e.id} effect={e} />
+          ))}
+          {forwardTargets.map((t) => (
+            <Chip key={t.id} className="gap-1" style={{ color: t.color }}>
+              <ArrowRight className="size-3" />
+              {t.name}
+            </Chip>
+          ))}
+        </div>
       </Card>
 
       <ConfirmDialog

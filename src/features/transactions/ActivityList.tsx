@@ -30,7 +30,18 @@ function TransactionRow({ tx }: { tx: Transaction }) {
       : `${fromBox?.name ?? '—'} · ${cat.label}`
 
   return (
-    <div className="group flex items-center gap-3 rounded-xl px-2.5 py-2.5 transition-colors hover:bg-raised/50">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => composer.edit(tx)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          composer.edit(tx)
+        }
+      }}
+      className="group flex cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2.5 transition-colors hover:bg-raised/50"
+    >
       <div
         className="grid size-9 shrink-0 place-items-center rounded-xl"
         style={{ backgroundColor: `${cat.color}1f`, color: cat.color }}
@@ -65,6 +76,7 @@ function TransactionRow({ tx }: { tx: Transaction }) {
             size="icon"
             variant="ghost"
             aria-label="Transaction options"
+            onClick={(e) => e.stopPropagation()}
             className="size-8 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
           >
             <MoreHorizontal className="size-4" />
