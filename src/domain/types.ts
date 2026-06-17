@@ -145,11 +145,33 @@ export interface Transaction {
   createdAt: ISODateTime
 }
 
+/**
+ * A breakpoint on a goal's worth-over-time curve: from `date` onward its rating
+ * holds `value` until the next point. Lets a goal matter more in some seasons
+ * than others ("worth 9 this year, 4 once the moment passes").
+ */
+export interface ValuePoint {
+  date: ISODate
+  value: number // happiness rating, ~0..10
+}
+
+/** A goal's worth as happiness: a flat rating, or a step curve that shifts over time. */
+export type GoalValue = number | ValuePoint[]
+
+/** `open` — still wanted. `done` — fulfilled, archived but kept (never deleted). */
+export type GoalStatus = 'open' | 'done'
+
 export interface Goal {
   id: string
   label: string
-  target: number // in base currency
+  cost: number // base currency — what it takes to fulfil
+  value: GoalValue // happiness rating: a flat number, or points that change over time
+  boxIds: string[] // funding boxes; empty = the whole net worth backs it
   color?: string
+  note?: string
+  status: GoalStatus
+  completedDate?: ISODate // when it was marked done, kept for the record
+  createdAt: ISODateTime
 }
 
 export interface Settings {
@@ -158,6 +180,8 @@ export interface Settings {
   rates: Record<CurrencyCode, number>
   /** global annual inflation used to discount the whole net worth in the "real" view */
   inflation?: number
+  /** how fast future happiness fades vs today's, per year — the goal "patience" knob (default 0.15) */
+  happinessDiscount?: number
   /**
    * User edits to the currency catalogue: brand-new custom currencies *and*
    * overrides of built-in ones (matched by `code`). Merged over the JSON

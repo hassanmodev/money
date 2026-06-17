@@ -185,7 +185,17 @@ describe('milestones', () => {
   it('flags when a goal target is first reached', () => {
     const s: FinanceState = {
       ...state([box({ openingBalance: 1000, effects: [interest(0.2)] })]),
-      goals: [{ id: 'g1', label: 'First 2k', target: 2000 }],
+      goals: [
+        {
+          id: 'g1',
+          label: 'First 2k',
+          cost: 2000,
+          value: 5,
+          boxIds: [],
+          status: 'open',
+          createdAt: '2026-01-01T00:00:00Z',
+        },
+      ],
     }
     const r = project(s, { from: '2026-01-01', to: '2036-01-01' })
     const goal = r.milestones.find((m) => m.id === 'goal-g1')

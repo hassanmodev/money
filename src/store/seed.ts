@@ -27,8 +27,43 @@ export function createSeed(): FinanceState {
       inflation: 0.025,
     },
     goals: [
-      { id: 'goal-fund', label: 'Emergency fund', target: 15000, color: '#9eb87f' },
-      { id: 'goal-house', label: 'House deposit', target: 60000, color: '#d4845c' },
+      {
+        id: 'goal-fund',
+        label: 'Emergency fund',
+        cost: 15000,
+        value: 9, // safety first — steadily worth a lot
+        boxIds: ['box-savings'],
+        color: '#9eb87f',
+        note: 'Six months of breathing room.',
+        status: 'open',
+        createdAt: CREATED,
+      },
+      {
+        id: 'goal-trip',
+        label: 'Big trip',
+        cost: 6000,
+        // worth the most while we're young enough to enjoy it; fades later
+        value: [
+          { date: '2026-01-01', value: 8 },
+          { date: '2028-01-01', value: 5 },
+          { date: '2031-01-01', value: 2 },
+        ],
+        boxIds: ['box-checking', 'box-savings'],
+        color: '#74b1a3',
+        status: 'open',
+        createdAt: CREATED,
+      },
+      {
+        id: 'goal-house',
+        label: 'House deposit',
+        cost: 60000,
+        value: 10,
+        boxIds: ['box-savings', 'box-brokerage'],
+        color: '#d4845c',
+        note: 'The big one.',
+        status: 'open',
+        createdAt: CREATED,
+      },
     ],
     boxes: [
       {

@@ -5,6 +5,7 @@ import { TooltipProvider } from '@/ui'
 import OverviewPage from '@/features/overview/OverviewPage'
 import BoxesPage from '@/features/boxes/BoxesPage'
 import PlanningPage from '@/features/planning/PlanningPage'
+import GoalsPage from '@/features/goals/GoalsPage'
 import ActivityPage from '@/features/transactions/ActivityPage'
 import SettingsPage from '@/features/settings/SettingsPage'
 
@@ -18,6 +19,7 @@ export default function App() {
               <Route path="/" element={<OverviewPage />} />
               <Route path="/boxes" element={<BoxesPage />} />
               <Route path="/planning" element={<PlanningPage />} />
+              <Route path="/goals" element={<GoalsPage />} />
               <Route path="/activity" element={<ActivityPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="*" element={<OverviewPage />} />

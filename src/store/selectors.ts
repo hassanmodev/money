@@ -3,9 +3,11 @@ import {
   boxValueAt,
   mergeCurrencies,
   netWorthAt,
+  planGoals,
   project,
   type CurrencyMeta,
   type FinanceState,
+  type GoalPlan,
   type ProjectionOptions,
   type ProjectionResult,
 } from '@/domain'
@@ -59,5 +61,15 @@ export function useProjection(opts: ProjectionOptions): ProjectionResult {
   return useMemo(
     () => project(state, opts),
     [state, opts.from, opts.to, opts.steps],
+  )
+}
+
+/** The greedy goal plan over a horizon (months), recomputed when inputs change. */
+export function useGoalPlan(horizonMonths: number, discount?: number): GoalPlan {
+  const state = useFinanceState()
+  const from = todayISO()
+  return useMemo(
+    () => planGoals(state, { from, horizonMonths, discount }),
+    [state, from, horizonMonths, discount],
   )
 }

@@ -177,11 +177,15 @@ function detectMilestones(
   start: number,
 ): Milestone[] {
   const out: Milestone[] = []
+  // A goal's funders' combined balance (base) — or the whole net worth if none.
+  const funded = (p: ProjectionPoint, g: Goal) =>
+    g.boxIds.length ? g.boxIds.reduce((s, id) => s + (p.perBox[id] ?? 0), 0) : p.nominal
   for (const g of goals) {
-    if (g.target <= start) continue
-    const hit = points.find((p) => p.nominal >= g.target)
+    if (g.status === 'done' || g.cost <= 0) continue
+    if (points[0] && funded(points[0], g) >= g.cost) continue // already afforded
+    const hit = points.find((p) => funded(p, g) >= g.cost)
     if (hit) {
-      out.push({ id: `goal-${g.id}`, label: g.label, date: hit.date, value: g.target, kind: 'goal' })
+      out.push({ id: `goal-${g.id}`, label: g.label, date: hit.date, value: g.cost, kind: 'goal' })
     }
   }
   if (start > 0) {
