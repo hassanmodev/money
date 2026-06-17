@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react'
+import { Plus, Settings as SettingsIcon } from 'lucide-react'
 import { motion } from 'motion/react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { cn } from '@/lib/cn'
@@ -84,11 +84,20 @@ function MobileHeader() {
         <BrandMark className="size-8" />
         <span className="font-serif text-lg text-ink">Money</span>
       </Link>
-      <div className="text-right">
-        <div className="text-[10px] uppercase leading-none tracking-[0.1em] text-faint">
-          Net worth
+      <div className="flex items-center gap-3">
+        <div className="text-right">
+          <div className="text-[10px] uppercase leading-none tracking-[0.1em] text-faint">
+            Net worth
+          </div>
+          <Money amount={net} className="font-serif text-base text-ink" />
         </div>
-        <Money amount={net} className="font-serif text-base text-ink" />
+        <Link
+          to="/settings"
+          aria-label="Settings"
+          className="grid size-9 shrink-0 place-items-center rounded-xl text-faint transition-colors hover:text-ink"
+        >
+          <SettingsIcon className="size-5" />
+        </Link>
       </div>
     </header>
   )
@@ -111,12 +120,12 @@ function TabLink({ item }: { item: NavItemDef }) {
 
 function MobileTabBar() {
   const composer = useComposer()
-  // Overview · Boxes · [Add] · Planning · Settings
-  const [overview, boxes, planning, , settings] = NAV
+  // Overview · Boxes · [Add] · Planning · Goals  (Settings lives in the header gear)
+  const byTo = (to: string) => NAV.find((n) => n.to === to)!
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-around border-t border-line bg-canvas/90 px-2 pb-[env(safe-area-inset-bottom)] pt-2 backdrop-blur-lg md:hidden">
-      <TabLink item={overview} />
-      <TabLink item={boxes} />
+      <TabLink item={byTo('/')} />
+      <TabLink item={byTo('/boxes')} />
       <button
         onClick={() => composer.open()}
         aria-label="Add entry"
@@ -124,8 +133,8 @@ function MobileTabBar() {
       >
         <Plus className="size-6" />
       </button>
-      <TabLink item={planning} />
-      <TabLink item={settings} />
+      <TabLink item={byTo('/planning')} />
+      <TabLink item={byTo('/goals')} />
     </nav>
   )
 }

@@ -14,6 +14,7 @@
 import { format, parseISO } from 'date-fns'
 import { realDiscount } from './effects'
 import { FlowNetwork } from './flow'
+import { goalFundingLegs } from './goals'
 import { toBase, convert } from './money'
 import { occurrencesBetween } from './recurrence'
 import type {
@@ -38,17 +39,19 @@ export interface ProjectionPoint {
   perBox: Record<string, number> // nominal in base currency, for stacking
 }
 
-export interface Milestone {
+/** A goal achieved on the timeline — drawn as a flag on the projection. */
+export interface Marker {
   id: string
   label: string
   date: ISODate
-  value: number
-  kind: 'goal' | 'auto'
+  /** spend taken out of net worth at this date (base currency) */
+  cost: number
+  color: string
 }
 
 export interface ProjectionResult {
   points: ProjectionPoint[]
-  milestones: Milestone[]
+  markers: Marker[]
   from: ISODate
   to: ISODate
   baseCurrency: CurrencyCode
@@ -87,6 +90,35 @@ function expand(tx: Transaction, from: ISODate, to: ISODate): Occurrence[] {
     amount: tx.amount,
     currency: tx.currency,
   }))
+}
+
+/**
+ * Turn achieved (`done`) goals into synthetic expenses, so the money they cost
+ * actually leaves the projection. The spend is split across the goal's funding
+ * boxes (those present in `boxes`); each leg rides through `simulate` as a plain
+ * base-currency expense and is converted into the box's currency there. Goals
+ * with no present funding box spend nothing — they're advisory markers only.
+ * These are computed on the fly, never persisted, never shown in the activity feed.
+ */
+function goalOutflows(goals: Goal[], boxes: Box[], baseCurrency: CurrencyCode): Transaction[] {
+  const present = new Set(boxes.map((b) => b.id))
+  const out: Transaction[] = []
+  for (const g of goals) {
+    if (g.status !== 'done' || !g.doneDate) continue
+    const fund = g.boxIds.filter((id) => present.has(id))
+    for (const leg of goalFundingLegs(g, fund)) {
+      out.push({
+        id: `goal-${g.id}-${leg.boxId}`,
+        kind: 'expense',
+        boxId: leg.boxId,
+        amount: leg.baseAmount, // base currency; simulate converts into the box
+        currency: baseCurrency,
+        date: g.doneDate,
+        createdAt: g.createdAt,
+      })
+    }
+  }
+  return out
 }
 
 // Same-instant ordering: a box opens, then money leaves, then money arrives —
@@ -171,34 +203,9 @@ function simulate(
   return out
 }
 
-function detectMilestones(
-  points: ProjectionPoint[],
-  goals: Goal[],
-  start: number,
-): Milestone[] {
-  const out: Milestone[] = []
-  // A goal's funders' combined balance (base) — or the whole net worth if none.
-  const funded = (p: ProjectionPoint, g: Goal) =>
-    g.boxIds.length ? g.boxIds.reduce((s, id) => s + (p.perBox[id] ?? 0), 0) : p.nominal
-  for (const g of goals) {
-    if (g.status === 'done' || g.cost <= 0) continue
-    if (points[0] && funded(points[0], g) >= g.cost) continue // already afforded
-    const hit = points.find((p) => funded(p, g) >= g.cost)
-    if (hit) {
-      out.push({ id: `goal-${g.id}`, label: g.label, date: hit.date, value: g.cost, kind: 'goal' })
-    }
-  }
-  if (start > 0) {
-    const dbl = points.find((p) => p.nominal >= start * 2)
-    if (dbl) {
-      out.push({ id: 'auto-double', label: 'Doubles', date: dbl.date, value: start * 2, kind: 'auto' })
-    }
-  }
-  return out
-}
-
 export function project(state: FinanceState, opts: ProjectionOptions): ProjectionResult {
   const { settings } = state
+  const goals = state.goals ?? []
   const active = state.boxes.filter((b) => !b.archived)
   const fromT = parseISO(opts.from).getTime()
   const toT = parseISO(opts.to).getTime()
@@ -210,7 +217,8 @@ export function project(state: FinanceState, opts: ProjectionOptions): Projectio
   )
   const sampleDates = sampleTimes.map(iso)
 
-  const series = simulate(active, state.transactions, settings, sampleTimes)
+  const txns = [...state.transactions, ...goalOutflows(goals, active, settings.baseCurrency)]
+  const series = simulate(active, txns, settings, sampleTimes)
   const perBoxBase: Record<string, number[]> = {}
   for (const box of active) {
     perBoxBase[box.id] = series[box.id].map((v) => toBase(v, box.currency, settings))
@@ -232,10 +240,14 @@ export function project(state: FinanceState, opts: ProjectionOptions): Projectio
     return { date: sampleDates[i], t, nominal, real: real * globalDiscount, perBox }
   })
 
+  const markers: Marker[] = goals
+    .filter((g) => g.status === 'done' && g.doneDate && g.doneDate >= opts.from && g.doneDate <= opts.to)
+    .map((g) => ({ id: g.id, label: g.name, date: g.doneDate!, cost: g.cost, color: g.color }))
+
   const currentNominal = points[0]?.nominal ?? 0
   return {
     points,
-    milestones: detectMilestones(points, state.goals, currentNominal),
+    markers,
     from: opts.from,
     to: opts.to,
     baseCurrency: settings.baseCurrency,
@@ -261,16 +273,51 @@ export function boxValueAt(
   const boxes = active.some((b) => b.id === boxId)
     ? active
     : state.boxes.filter((b) => b.id === boxId)
-  const series = simulate(boxes, state.transactions, state.settings, [parseISO(dateISO).getTime()])
+  const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], boxes, state.settings.baseCurrency)]
+  const series = simulate(boxes, txns, state.settings, [parseISO(dateISO).getTime()])
   return series[boxId]?.[0] ?? 0
 }
 
 /** Total net worth on a date, in the base currency. */
 export function netWorthAt(state: FinanceState, dateISO: ISODate): number {
   const active = state.boxes.filter((b) => !b.archived)
-  const series = simulate(active, state.transactions, state.settings, [parseISO(dateISO).getTime()])
+  const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], active, state.settings.baseCurrency)]
+  const series = simulate(active, txns, state.settings, [parseISO(dateISO).getTime()])
   return active.reduce(
     (sum, b) => sum + toBase(series[b.id][0], b.currency, state.settings),
     0,
   )
+}
+
+/** A box that funds a goal, valued on a date in the base currency. */
+export interface GoalFundingBox {
+  boxId: string
+  base: number
+}
+
+/**
+ * The boxes that fund open goals, each valued on `dateISO` in the base currency.
+ * Goals draw their cost from these boxes, so their combined balance *is* the
+ * planner's budget — there's no separate number to keep in sync. A box shared by
+ * several goals is counted once; boxes already drained by achieved goals reflect
+ * their reduced value. Archived boxes are skipped.
+ */
+export function goalFundingBoxes(state: FinanceState, dateISO: ISODate): GoalFundingBox[] {
+  const ids = new Set<string>()
+  for (const g of state.goals ?? []) {
+    if (g.status !== 'open') continue
+    for (const id of g.boxIds) ids.add(id)
+  }
+  if (ids.size === 0) return []
+  const active = state.boxes.filter((b) => !b.archived)
+  const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], active, state.settings.baseCurrency)]
+  const series = simulate(active, txns, state.settings, [parseISO(dateISO).getTime()])
+  return active
+    .filter((b) => ids.has(b.id))
+    .map((b) => ({ boxId: b.id, base: toBase(series[b.id][0], b.currency, state.settings) }))
+}
+
+/** The planner's spendable budget: the summed base value of {@link goalFundingBoxes}. */
+export function goalFundingBudget(state: FinanceState, dateISO: ISODate): number {
+  return goalFundingBoxes(state, dateISO).reduce((sum, f) => sum + f.base, 0)
 }

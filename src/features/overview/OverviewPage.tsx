@@ -1,14 +1,12 @@
-import { ArrowUpRight, CalendarClock } from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Page } from '@/components/Page'
-import { addYearsISO, fmtDate, todayISO } from '@/lib/date'
+import { addYearsISO, todayISO } from '@/lib/date'
 import { fmtSignedPercent } from '@/lib/format'
-import { useActiveBoxes, useBoxValue, useGoalPlan, useNetWorth, useProjection } from '@/store/selectors'
+import { useActiveBoxes, useBoxValue, useNetWorth, useProjection } from '@/store/selectors'
 import type { Box } from '@/domain'
-import { Card, Chip, Money, Sparkline } from '@/ui'
+import { Card, Money, Sparkline } from '@/ui'
 import { boxIcon, KIND_LABEL } from '@/ui/icons'
-import { horizonLabel } from '@/features/planning/horizon'
-import { summarizeValue } from '@/features/goals/helpers'
 import { ActivityList } from '@/features/transactions/ActivityList'
 
 function greeting() {
@@ -67,53 +65,6 @@ function BoxTile({ box }: { box: Box }) {
   )
 }
 
-/** The next few goals the plan brings within reach — a teaser into /goals. */
-function UpcomingGoals() {
-  const plan = useGoalPlan(120)
-  if (plan.items.length === 0) return null
-  const upcoming = plan.items
-    .filter((it) => it.reachYear !== null)
-    .sort((a, b) => (a.reachYear ?? 0) - (b.reachYear ?? 0))
-    .slice(0, 3)
-
-  return (
-    <section className="mt-6">
-      <SectionHead title="On the horizon" to="/goals" />
-      <Card className="p-2">
-        {upcoming.length === 0 ? (
-          <p className="px-3 py-6 text-center text-sm text-faint">
-            No goals land within ten years yet — open Goals to see what it would take.
-          </p>
-        ) : (
-          <div className="flex flex-col">
-            {upcoming.map((it) => {
-              const color = it.goal.color ?? '#d4845c'
-              return (
-                <Link
-                  key={it.goal.id}
-                  to="/goals"
-                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-raised/60"
-                >
-                  <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-ink">{it.goal.label}</div>
-                    <div className="text-xs text-faint">{summarizeValue(it.goal.value)}</div>
-                  </div>
-                  <div className="hidden text-xs text-muted sm:flex sm:items-center sm:gap-1.5">
-                    <CalendarClock className="size-3.5 text-faint" />
-                    {fmtDate(it.reachDate!)}
-                  </div>
-                  <Chip dot={color}>in {horizonLabel(Math.max(1, Math.round((it.reachYear ?? 0) * 12)))}</Chip>
-                </Link>
-              )
-            })}
-          </div>
-        )}
-      </Card>
-    </section>
-  )
-}
-
 function SectionHead({ title, to }: { title: string; to: string }) {
   return (
     <div className="mb-3 flex items-center justify-between">
@@ -130,7 +81,6 @@ export default function OverviewPage() {
   return (
     <Page>
       <Hero />
-      <UpcomingGoals />
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <section>
           <SectionHead title="Your boxes" to="/boxes" />

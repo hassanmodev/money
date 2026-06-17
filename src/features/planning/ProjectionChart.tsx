@@ -199,13 +199,13 @@ export function ProjectionChart({
           strokeLinecap="round"
         />
 
-        {/* milestones */}
-        {result.milestones.map((m) => {
+        {/* goal achievements — money leaves here */}
+        {result.markers.map((m) => {
           const mx = x(parseISO(m.date).getTime())
           return (
             <g key={m.id}>
-              <line x1={mx} x2={mx} y1={padT} y2={H - padB} stroke="var(--color-honey)" strokeWidth={1} strokeDasharray="2 4" opacity={0.5} />
-              <circle cx={mx} cy={padT} r={3} fill="var(--color-honey)" />
+              <line x1={mx} x2={mx} y1={padT} y2={H - padB} stroke={m.color} strokeWidth={1} strokeDasharray="2 4" opacity={0.55} />
+              <circle cx={mx} cy={padT} r={3} fill={m.color} />
             </g>
           )
         })}
@@ -215,17 +215,17 @@ export function ProjectionChart({
         <circle cx={hx} cy={y(activeTop[hi])} r={4.5} fill="var(--color-clay)" stroke="var(--color-canvas)" strokeWidth={2} />
       </svg>
 
-      {/* milestone labels */}
-      {result.milestones.map((m) => {
+      {/* goal achievement labels */}
+      {result.markers.map((m) => {
         const mx = x(parseISO(m.date).getTime())
         return (
           <div
             key={m.id}
-            className="pointer-events-none absolute flex items-center gap-1 text-[10px] text-honey"
-            style={{ left: Math.min(width - 90, mx + 5), top: padT - 2 }}
+            className="pointer-events-none absolute flex items-center gap-1 text-[10px]"
+            style={{ left: Math.min(width - 96, mx + 5), top: padT - 3, color: m.color }}
           >
             <Flag className="size-2.5" />
-            {m.label}
+            <span className="max-w-[88px] truncate">{m.label}</span>
           </div>
         )
       })}

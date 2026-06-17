@@ -1,27 +1,30 @@
-import { CheckCircle2, Plus, RotateCcw, Sparkles, Target, Trash2 } from 'lucide-react'
+import { Sparkles, Target, Plus, Wallet } from 'lucide-react'
 import { motion } from 'motion/react'
-import type { ReactNode } from 'react'
-import { useState } from 'react'
-import { DEFAULT_HAPPINESS_DISCOUNT, type Goal } from '@/domain'
+import { useMemo, useState } from 'react'
+import { goalHappiness, type Goal, type HappinessOptions } from '@/domain'
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
-import { fmtDate } from '@/lib/date'
-import { horizonLabel } from '@/features/planning/horizon'
-import { HorizonControl } from '@/features/planning/HorizonControl'
-import { useActiveBoxes, useGoalPlan } from '@/store/selectors'
+import { addMonthsISO, todayISO } from '@/lib/date'
+import { useActiveBoxes, useBankedHappiness, useGoalBudget, useGoalFundingBoxes, useGoalPlan, useGoals } from '@/store/selectors'
 import { useStore } from '@/store/store'
-import { Button, Card, Slider } from '@/ui'
+import { Button, Card, Chip, Money, Segmented } from '@/ui'
 import { GoalCard } from './GoalCard'
 import { GoalEditor } from './GoalEditor'
-import { GoalsChart } from './GoalsChart'
-import { fmtHappiness, patienceLabel, summarizeValue } from './helpers'
+import { HappinessChart, type HappinessTrack } from './HappinessChart'
+import { STATUS_META, STATUS_ORDER } from './goal-meta'
 
-function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: ReactNode }) {
+const HORIZON_MONTHS = 48
+const HALF_LIFE_PRESETS = [
+  { value: '12', label: 'Now' },
+  { value: '24', label: 'Balanced' },
+  { value: '48', label: 'Long view' },
+]
+
+function Stat({ label, value, accent }: { label: string; value: React.ReactNode; accent?: boolean }) {
   return (
     <Card className="p-4">
       <div className="text-[11px] uppercase tracking-[0.1em] text-faint">{label}</div>
-      <div className="mt-1 font-serif text-xl text-ink">{value}</div>
-      {hint && <div className="mt-0.5 text-xs text-faint">{hint}</div>}
+      <div className={accent ? 'mt-1 font-serif text-xl text-sage' : 'mt-1 font-serif text-xl text-ink'}>{value}</div>
     </Card>
   )
 }
@@ -35,71 +38,45 @@ function EmptyState({ onNew }: { onNew: () => void }) {
       <div>
         <h3 className="font-serif text-xl text-ink">No goals yet</h3>
         <p className="mx-auto mt-1 max-w-xs text-sm text-muted">
-          Name something worth saving for and how much it would mean — we'll find the order that
-          buys the most happiness.
+          Name something worth money — a trip, a thing, a milestone — and rate the happiness it brings.
         </p>
       </div>
       <Button onClick={onNew}>
         <Plus className="size-4" />
-        Create your first goal
-      </Button>
-    </div>
-  )
-}
-
-/** A kept record of a fulfilled goal. */
-function DoneRow({ goal, onEdit }: { goal: Goal; onEdit: () => void }) {
-  const updateGoal = useStore((s) => s.updateGoal)
-  const removeGoal = useStore((s) => s.removeGoal)
-  return (
-    <div className="flex items-center gap-3 py-2.5">
-      <div
-        className="grid size-8 shrink-0 place-items-center rounded-lg"
-        style={{ backgroundColor: `${goal.color ?? '#9eb87f'}1f`, color: goal.color ?? '#9eb87f' }}
-      >
-        <CheckCircle2 className="size-4" />
-      </div>
-      <button onClick={onEdit} className="min-w-0 flex-1 text-left">
-        <div className="truncate text-sm text-ink line-through decoration-line">{goal.label}</div>
-        <div className="text-xs text-faint">
-          {goal.completedDate ? `Fulfilled ${fmtDate(goal.completedDate)}` : 'Fulfilled'} ·{' '}
-          {summarizeValue(goal.value)}
-        </div>
-      </button>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => updateGoal(goal.id, { status: 'open', completedDate: undefined })}
-      >
-        <RotateCcw className="size-3.5" />
-        Reopen
-      </Button>
-      <Button
-        size="icon"
-        variant="ghost"
-        aria-label="Delete goal"
-        className="size-8 text-faint hover:text-rust"
-        onClick={() => removeGoal(goal.id)}
-      >
-        <Trash2 className="size-4" />
+        Add your first goal
       </Button>
     </div>
   )
 }
 
 export default function GoalsPage() {
-  const goals = useStore((s) => s.goals)
+  const goals = useGoals()
+  const settings = useStore((s) => s.settings)
   const updateSettings = useStore((s) => s.updateSettings)
-  const discount = useStore((s) => s.settings.happinessDiscount ?? DEFAULT_HAPPINESS_DISCOUNT)
+  const setGoalStatus = useStore((s) => s.setGoalStatus)
   const boxes = useActiveBoxes()
 
-  const [months, setMonths] = useState(60)
+  const now = todayISO()
+  const horizon = addMonthsISO(now, HORIZON_MONTHS)
+  const halfLifeMonths = settings.happinessHalfLifeMonths ?? 24
+  const opts: HappinessOptions = useMemo(
+    () => ({ now, horizon, halfLifeMonths }),
+    [now, horizon, halfLifeMonths],
+  )
+
+  // The budget isn't typed in — it's the live value of the boxes funding your
+  // open goals. Earmark a box on a goal ("Funded by") and it joins the pool.
+  const budget = useGoalBudget()
+  const funding = useGoalFundingBoxes()
+  const boxById = useMemo(() => new Map(boxes.map((b) => [b.id, b])), [boxes])
+
+  const plan = useGoalPlan(budget, opts)
+  const banked = useBankedHappiness(opts)
+  const chosenIds = useMemo(() => new Set(plan.chosen.map((c) => c.goal.id)), [plan])
+
+  const [chartMode, setChartMode] = useState<'banked' | 'plan'>('plan')
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<Goal | undefined>(undefined)
-
-  const plan = useGoalPlan(months, discount)
-  const done = goals.filter((g) => g.status === 'done')
-
   const openNew = () => {
     setEditing(undefined)
     setEditorOpen(true)
@@ -109,19 +86,33 @@ export default function GoalsPage() {
     setEditorOpen(true)
   }
 
-  // soonest goal the plan actually reaches — the headline "next up"
-  const nextUp = plan.items
-    .filter((it) => it.reachYear !== null)
-    .sort((a, b) => (a.reachYear ?? 0) - (b.reachYear ?? 0))[0]
-  const efficiency = plan.totalPotential > 0 ? plan.totalCaptured / plan.totalPotential : 0
+  // tracks for the happiness chart: achieved goals, plus (optionally) the plan
+  const tracks = useMemo<HappinessTrack[]>(() => {
+    const done: HappinessTrack[] = goals
+      .filter((g) => g.status === 'done' && g.doneDate)
+      .map((g) => ({ id: g.id, name: g.name, color: g.color, achieveDate: g.doneDate!, value: g.value }))
+    if (chartMode === 'banked') return done
+    const planned: HappinessTrack[] = plan.chosen.map((c) => ({
+      id: c.goal.id,
+      name: c.goal.name,
+      color: c.goal.color,
+      achieveDate: now,
+      value: c.goal.value,
+      planned: true,
+    }))
+    return [...done, ...planned]
+  }, [goals, plan, chartMode, now])
+
+  const openCount = goals.filter((g) => g.status === 'open').length
+  const maxDensity = Math.max(
+    0,
+    ...[...plan.chosen, ...plan.skipped].map((s) => (Number.isFinite(s.density) ? s.density : 0)),
+  )
 
   if (goals.length === 0) {
     return (
       <Page>
-        <PageHeader
-          title="Goals"
-          subtitle="What you're saving for — ordered to buy the most happiness your money can."
-        />
+        <PageHeader title="Goals" subtitle="Turn money into happiness — and spend it where it counts most." />
         <EmptyState onNew={openNew} />
         <GoalEditor key="new" open={editorOpen} onOpenChange={setEditorOpen} goal={editing} />
       </Page>
@@ -132,7 +123,7 @@ export default function GoalsPage() {
     <Page>
       <PageHeader
         title="Goals"
-        subtitle="Ranked by happiness per euro — each lands when your wealth covers it. Sooner counts for more."
+        subtitle="Turn money into happiness — and spend it where it counts most."
         actions={
           <Button onClick={openNew}>
             <Plus className="size-4" />
@@ -141,113 +132,229 @@ export default function GoalsPage() {
         }
       />
 
-      {plan.items.length > 0 && (
-        <>
-          <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
-            <Card className="p-4 md:p-5">
-              <HorizonControl months={months} onChange={setMonths} />
-            </Card>
-            <Card className="flex flex-col justify-center gap-2 p-4 md:p-5">
-              <div className="flex items-end justify-between gap-3">
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.1em] text-faint">Patience</div>
-                  <div className="mt-0.5 font-serif text-2xl text-ink first-letter:uppercase">
-                    {patienceLabel(discount)}
-                  </div>
-                </div>
-                <span className="tabular text-sm text-muted">{Math.round(discount * 100)}%/yr</span>
-              </div>
-              <Slider
-                aria-label="Patience"
-                value={discount}
-                min={0}
-                max={0.4}
-                step={0.01}
-                onValueChange={(v) => updateSettings({ happinessDiscount: v })}
-              />
-              <p className="text-xs text-faint">
-                How much more today's happiness counts than tomorrow's.
-              </p>
-            </Card>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-            <Stat label="Joy banked" value={fmtHappiness(plan.totalCaptured)} hint={`over ${horizonLabel(months)}`} />
-            <Stat label="In reach" value={`${plan.reachedCount} of ${plan.items.length}`} hint="goals affordable" />
-            <Stat label="Of potential" value={`${Math.round(efficiency * 100)}%`} hint="captured vs ideal" />
-            <Stat
-              label="Next up"
-              value={nextUp ? nextUp.goal.label : '—'}
-              hint={nextUp?.reachDate ? fmtDate(nextUp.reachDate) : 'nothing in reach'}
-            />
-          </div>
-
-          <Card className="mt-4 p-4 md:p-5">
-            <div className="mb-3 flex items-center gap-2">
-              <Sparkles className="size-4 text-clay" />
-              <h2 className="text-sm font-medium text-muted">Happiness banked over time</h2>
+      {/* budget (from the boxes funding goals) + weighting */}
+      <Card className="p-4 md:p-5">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium uppercase tracking-[0.08em] text-faint">Spendable budget</span>
+            <div className="font-serif text-2xl text-ink">
+              <Money amount={budget} />
             </div>
-            {plan.totalCaptured > 0 ? (
-              <GoalsChart plan={plan} />
+            {funding.length > 0 ? (
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-faint">from</span>
+                {funding.map((f) => {
+                  const box = boxById.get(f.boxId)
+                  if (!box) return null
+                  return (
+                    <Chip key={f.boxId} dot={box.color}>
+                      {box.name} · <Money amount={f.base} compact className="text-muted" />
+                    </Chip>
+                  )
+                })}
+              </div>
             ) : (
-              <div className="grid h-[220px] place-items-center text-center md:h-[280px]">
-                <p className="max-w-xs text-sm text-faint">
-                  Nothing lands within {horizonLabel(months)}. Stretch the horizon, trim a cost, or
-                  feed the funding boxes.
-                </p>
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-faint">
+                <Wallet className="size-3.5" />
+                No boxes fund your open goals yet — set “Funded by” on a goal to build the budget.
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium uppercase tracking-[0.08em] text-faint">Near-term focus</span>
+            <Segmented
+              value={String(halfLifeMonths)}
+              onChange={(v) => updateSettings({ happinessHalfLifeMonths: Number(v) })}
+              options={HALF_LIFE_PRESETS}
+              size="sm"
+            />
+            <p className="text-xs text-faint">Worth halves every {halfLifeMonths} months further out.</p>
+          </div>
+        </div>
+      </Card>
+
+      {/* summary */}
+      <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Stat label="Banked" value={<span className="tabular">{banked.toFixed(0)}</span>} accent />
+        <Stat label="Plan unlocks" value={<span className="tabular">+{plan.happiness.toFixed(0)}</span>} accent />
+        <Stat label="Plan spend" value={<Money amount={plan.spend} compact />} />
+        <Stat label="Open goals" value={<span className="tabular">{openCount}</span>} />
+      </div>
+
+      {/* the plan */}
+      <Card className="mt-4 p-4 md:p-5">
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <h2 className="font-serif text-lg text-ink">Best plan</h2>
+          <span className="text-xs text-faint">
+            within <Money amount={budget} compact /> · greedy by happiness per cost
+          </span>
+        </div>
+
+        {plan.chosen.length === 0 && plan.skipped.length === 0 ? (
+          <p className="py-4 text-sm text-faint">No open goals to plan. Add one, or reopen a shelved goal.</p>
+        ) : (
+          <div className="mt-3 flex flex-col">
+            {plan.chosen.map((s, i) => (
+              <PlanRow
+                key={s.goal.id}
+                rank={i + 1}
+                goal={s.goal}
+                cost={s.cost}
+                happiness={s.happiness}
+                density={s.density}
+                maxDensity={maxDensity}
+                onAchieve={() => setGoalStatus(s.goal.id, 'done')}
+              />
+            ))}
+            {plan.skipped.length > 0 && (
+              <div className="mt-3 border-t border-line pt-3">
+                <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-faint">Beyond the budget</div>
+                {plan.skipped.map((s) => (
+                  <PlanRow
+                    key={s.goal.id}
+                    goal={s.goal}
+                    cost={s.cost}
+                    happiness={s.happiness}
+                    density={s.density}
+                    maxDensity={maxDensity}
+                    dimmed
+                  />
+                ))}
               </div>
             )}
-          </Card>
-
-          <div className="mt-6 mb-3 flex items-center justify-between">
-            <h2 className="font-serif text-xl text-ink">In priority order</h2>
-            <span className="text-xs text-faint">best happiness per euro first</span>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {plan.items.map((item, i) => (
-              <motion.div
-                key={item.goal.id}
-                className="h-full"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: i * 0.05, ease: [0.16, 1, 0.3, 1] }}
-              >
-                <GoalCard item={item} rank={i + 1} boxes={boxes} onEdit={() => openEdit(item.goal)} />
-              </motion.div>
-            ))}
+        )}
+      </Card>
+
+      {/* happiness over time */}
+      <Card className="mt-4 p-4 md:p-5">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-medium text-muted">Happiness over time</h2>
+          <Segmented
+            value={chartMode}
+            onChange={setChartMode}
+            options={[
+              { value: 'banked', label: 'Achieved' },
+              { value: 'plan', label: 'With plan' },
+            ]}
+            size="sm"
+          />
+        </div>
+
+        {tracks.length === 0 ? (
+          <div className="grid h-[220px] place-items-center text-sm text-faint md:h-[280px]">
+            {chartMode === 'banked' ? 'Nothing achieved yet.' : 'The plan is empty — fund a box on a goal, or add goals.'}
           </div>
-        </>
-      )}
+        ) : (
+          <HappinessChart tracks={tracks} now={now} horizon={horizon} halfLifeMonths={halfLifeMonths} />
+        )}
 
-      {plan.items.length === 0 && done.length > 0 && (
-        <Card className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-          <Sparkles className="size-7 text-honey" />
-          <p className="text-sm text-muted">Every goal fulfilled. Dream up the next one?</p>
-          <Button onClick={openNew}>
-            <Plus className="size-4" />
-            New goal
-          </Button>
-        </Card>
-      )}
+        <p className="mt-2 text-xs text-faint">
+          The filled area is total happiness — achieving sooner makes it wider. Dashed bands are the recommended plan.
+        </p>
+      </Card>
 
-      {done.length > 0 && (
-        <Card className="mt-6 p-5">
-          <h3 className="mb-1 font-serif text-lg text-ink">Fulfilled</h3>
-          <p className="mb-2 text-xs text-faint">Kept for the record — closed, never lost.</p>
-          <div className="divide-y divide-line">
-            {done.map((g) => (
-              <DoneRow key={g.id} goal={g} onEdit={() => openEdit(g)} />
-            ))}
-          </div>
-        </Card>
-      )}
+      {/* the goals themselves, grouped by where they are in life */}
+      {STATUS_ORDER.map((status) => {
+        const group = goals.filter((g) => g.status === status)
+        if (group.length === 0) return null
+        const meta = STATUS_META[status]
+        return (
+          <section key={status} className="mt-8">
+            <div className="mb-3 flex items-center gap-2">
+              <meta.icon className={`size-4 ${meta.tone}`} />
+              <h2 className="font-serif text-xl text-ink">{meta.label}</h2>
+              <span className="text-sm text-faint">{group.length}</span>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {group.map((g, i) => {
+                const achieveDate = g.status === 'done' && g.doneDate ? g.doneDate : now
+                const happiness = goalHappiness(g, achieveDate, opts)
+                const badge =
+                  g.status === 'open' ? (
+                    chosenIds.has(g.id) ? (
+                      <Chip className="gap-1 border-sage/40 text-sage">
+                        <Sparkles className="size-3" />
+                        In plan
+                      </Chip>
+                    ) : (
+                      <Chip className="text-faint">Over budget</Chip>
+                    )
+                  ) : undefined
+                return (
+                  <motion.div
+                    key={g.id}
+                    className="h-full"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: i * 0.04, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <GoalCard goal={g} halfLifeMonths={halfLifeMonths} happiness={happiness} badge={badge} onEdit={() => openEdit(g)} />
+                  </motion.div>
+                )
+              })}
+            </div>
+          </section>
+        )
+      })}
 
-      <GoalEditor
-        key={editing?.id ?? 'new'}
-        open={editorOpen}
-        onOpenChange={setEditorOpen}
-        goal={editing}
-      />
+      <GoalEditor key={editing?.id ?? 'new'} open={editorOpen} onOpenChange={setEditorOpen} goal={editing} />
     </Page>
+  )
+}
+
+function PlanRow({
+  rank,
+  goal,
+  cost,
+  happiness,
+  density,
+  maxDensity,
+  dimmed,
+  onAchieve,
+}: {
+  rank?: number
+  goal: Goal
+  cost: number
+  happiness: number
+  density: number
+  maxDensity: number
+  dimmed?: boolean
+  onAchieve?: () => void
+}) {
+  const width = maxDensity > 0 && Number.isFinite(density) ? Math.max(4, (density / maxDensity) * 100) : 100
+  return (
+    <div className={`group flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-raised/50 ${dimmed ? 'opacity-55' : ''}`}>
+      <div className="grid size-6 shrink-0 place-items-center rounded-md bg-sunken/60 text-xs tabular text-faint">
+        {rank ?? '–'}
+      </div>
+      <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: goal.color }} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-sm text-ink">{goal.name}</span>
+          <span className="shrink-0 text-xs tabular text-faint">
+            <Money amount={cost} compact />
+          </span>
+        </div>
+        <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-line">
+          <div className="h-full rounded-full" style={{ width: `${width}%`, backgroundColor: goal.color }} />
+        </div>
+      </div>
+      <div className="flex w-14 shrink-0 items-center justify-end gap-1 text-sm text-sage">
+        <Sparkles className="size-3.5" />
+        <span className="tabular">{happiness.toFixed(0)}</span>
+      </div>
+      {onAchieve && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+          onClick={onAchieve}
+        >
+          Achieve
+        </Button>
+      )}
+    </div>
   )
 }

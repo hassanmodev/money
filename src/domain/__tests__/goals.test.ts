@@ -1,157 +1,117 @@
 import { describe, expect, it } from 'vitest'
-import { planGoals, sampleRating, weightAt } from '../goals'
-import type { Box, FinanceState, Goal, Settings, Transaction } from '../types'
+import {
+  RatingCurve,
+  bankedHappiness,
+  distanceWeight,
+  goalHappiness,
+  planGoals,
+  type HappinessOptions,
+} from '../goals'
+import type { Goal } from '../types'
 
-const settings: Settings = { baseCurrency: 'EUR', rates: { EUR: 1 } }
+const NOW = '2026-01-01'
+const HORIZON = '2030-01-01' // ~4 years
+const opts: HappinessOptions = { now: NOW, horizon: HORIZON, halfLifeMonths: 24 }
 
 let n = 0
-const box = (b: Partial<Box>): Box => ({
-  id: `b${n++}`,
-  name: 'Box',
-  kind: 'savings',
-  currency: 'EUR',
-  openingBalance: 0,
-  openingDate: '2025-01-01',
-  color: '#d4845c',
-  effects: [],
-  createdAt: '2025-01-01T00:00:00Z',
-  ...b,
-})
-
-const goal = (g: Partial<Goal> & Pick<Goal, 'id' | 'cost' | 'value'>): Goal => ({
-  label: g.id,
+const goal = (g: Partial<Goal>): Goal => ({
+  id: `g${n++}`,
+  name: 'Goal',
+  cost: 100,
+  value: { type: 'flat', rating: 5 },
   boxIds: [],
   status: 'open',
-  createdAt: '2025-01-01T00:00:00Z',
+  color: '#9eb87f',
+  createdAt: '2026-01-01T00:00:00Z',
   ...g,
 })
 
-const world = (boxes: Box[], goals: Goal[], transactions: Transaction[] = []): FinanceState => ({
-  boxes,
-  transactions,
-  goals,
-  settings,
-})
-
-const FROM = '2026-01-01'
-const salary = (boxId: string, amount: number): Transaction => ({
-  id: `inc-${boxId}`,
-  kind: 'income',
-  boxId,
-  amount,
-  currency: 'EUR',
-  date: '2026-01-10',
-  createdAt: '2025-01-01T00:00:00Z',
-  recurrence: { every: 1, unit: 'month', anchor: '2026-01-10', end: { type: 'never' } },
-})
-
-describe('time weight', () => {
-  it('is 1 now and decays into the future', () => {
-    expect(weightAt(0, 0.15)).toBeCloseTo(1, 6)
-    expect(weightAt(1, 0)).toBeCloseTo(1, 6) // no discount = flat
-    expect(weightAt(1, 0.15)).toBeCloseTo(Math.exp(-0.15), 6)
-    expect(weightAt(2, 0.2)).toBeLessThan(weightAt(1, 0.2))
+describe('distance weighting', () => {
+  it('is 1 today and halves over the half-life', () => {
+    expect(distanceWeight(0, 24)).toBeCloseTo(1, 6)
+    expect(distanceWeight(2, 24)).toBeCloseTo(0.5, 6) // 24 months out
+    expect(distanceWeight(4, 24)).toBeCloseTo(0.25, 6)
+  })
+  it('never decays when the half-life is off', () => {
+    expect(distanceWeight(10, 0)).toBe(1)
   })
 })
 
-describe('rating curve sampling', () => {
-  it('holds a flat value', () => {
-    const s = sampleRating(7, FROM, 60, 10)
-    expect(s.every((v) => v === 7)).toBe(true)
+describe('RatingCurve', () => {
+  it('integrates a flat rating linearly with no discount', () => {
+    const c = new RatingCurve({ type: 'flat', rating: 8 }, NOW)
+    expect(c.area(0, 4, 0)).toBeCloseTo(32, 6) // 8 × 4 years
   })
 
-  it('steps between points over time, holding each until the next', () => {
-    const s = sampleRating(
-      [
-        { date: '2026-01-01', value: 8 },
-        { date: '2028-01-01', value: 2 },
-      ],
-      FROM,
-      48, // 4-year span
-      5, // samples at 0,1,2,3,4 years
+  it('discounts distant happiness (area shrinks under decay)', () => {
+    const c = new RatingCurve({ type: 'flat', rating: 8 }, NOW)
+    const lambda = Math.LN2 / 2 // half-life 24 months = 2 years
+    const expected = (8 * (1 - Math.exp(-lambda * 4))) / lambda
+    expect(c.area(0, 4, 24)).toBeCloseTo(expected, 6)
+    expect(c.area(0, 4, 24)).toBeLessThan(32)
+  })
+
+  it('reads a step curve, the first rating extending backward', () => {
+    const c = new RatingCurve(
+      { type: 'periods', points: [
+        { from: '2026-01-01', rating: 2 },
+        { from: '2027-01-01', rating: 6 },
+      ] },
+      NOW,
     )
-    expect(s[0]).toBe(8) // today
-    expect(s[4]).toBe(2) // four years out, past the breakpoint
-    expect(s[0]).toBeGreaterThan(s[4])
+    expect(c.rateAt(0)).toBe(2)
+    expect(c.rateAt(0.5)).toBe(2)
+    expect(c.rateAt(1.5)).toBe(6)
+    expect(c.rateAt(-1)).toBe(2) // first extends back
   })
 })
 
-describe('greedy plan', () => {
-  it('ranks by happiness per euro — best density first', () => {
-    // both affordable immediately; B is worth more for the same price
-    const b = box({ openingBalance: 100_000 })
-    const plan = planGoals(
-      world(
-        [b],
-        [goal({ id: 'A', cost: 1000, value: 5 }), goal({ id: 'B', cost: 1000, value: 8 })],
-      ),
-      { from: FROM, horizonMonths: 24, discount: 0.15 },
+describe('goalHappiness', () => {
+  it('rewards achieving sooner', () => {
+    const g = goal({ value: { type: 'flat', rating: 7 } })
+    const soon = goalHappiness(g, NOW, opts)
+    const later = goalHappiness(g, '2027-01-01', opts)
+    expect(soon).toBeGreaterThan(later)
+  })
+})
+
+describe('bankedHappiness', () => {
+  it('counts only achieved goals, from their achieved date', () => {
+    const done = goal({ status: 'done', doneDate: NOW, value: { type: 'flat', rating: 5 } })
+    const open = goal({ status: 'open' })
+    expect(bankedHappiness([done, open], opts)).toBeCloseTo(goalHappiness(done, NOW, opts), 6)
+  })
+})
+
+describe('planGoals (greedy knapsack)', () => {
+  it('takes the best happiness-per-cost first and stops at the budget', () => {
+    const free = goal({ id: 'free', cost: 0, value: { type: 'flat', rating: 4 } })
+    const rich = goal({ id: 'rich', cost: 100, value: { type: 'flat', rating: 9 } })
+    const poor = goal({ id: 'poor', cost: 100, value: { type: 'flat', rating: 3 } })
+    const plan = planGoals([free, rich, poor], 150, opts)
+
+    expect(plan.chosen.map((c) => c.goal.id)).toEqual(['free', 'rich'])
+    expect(plan.skipped.map((c) => c.goal.id)).toEqual(['poor'])
+    expect(plan.spend).toBe(100)
+    expect(plan.happiness).toBeCloseTo(
+      goalHappiness(free, NOW, opts) + goalHappiness(rich, NOW, opts),
+      6,
     )
-    expect(plan.items[0].goal.id).toBe('B')
-    expect(plan.items[0].density).toBeGreaterThan(plan.items[1].density)
-    expect(plan.reachedCount).toBe(2)
   })
 
-  it('buys the cheaper goal sooner when value ties (limited money over time)', () => {
-    const b = box({ openingBalance: 0 })
-    const plan = planGoals(
-      world(
-        [b],
-        [goal({ id: 'big', cost: 6000, value: 5 }), goal({ id: 'small', cost: 3000, value: 5 })],
-        [salary(b.id, 1000)],
-      ),
-      { from: FROM, horizonMonths: 18, discount: 0.15 },
-    )
-    const small = plan.items.find((i) => i.goal.id === 'small')!
-    const big = plan.items.find((i) => i.goal.id === 'big')!
-    expect(small.reachYear).not.toBeNull()
-    expect(big.reachYear).not.toBeNull()
-    // cheaper one is funded first, so it lands earlier
-    expect(small.reachYear!).toBeLessThan(big.reachYear!)
+  it('with no budget keeps only free goals', () => {
+    const free = goal({ id: 'free', cost: 0, value: { type: 'flat', rating: 4 } })
+    const paid = goal({ id: 'paid', cost: 50 })
+    const plan = planGoals([free, paid], 0, opts)
+    expect(plan.chosen.map((c) => c.goal.id)).toEqual(['free'])
+    expect(plan.spend).toBe(0)
   })
 
-  it('honours funders: an empty funding box keeps a goal out of reach', () => {
-    const rich = box({ id: 'rich', openingBalance: 100_000 })
-    const poor = box({ id: 'poor', openingBalance: 0 })
-    const plan = planGoals(
-      world([rich, poor], [goal({ id: 'g', cost: 1000, value: 9, boxIds: ['poor'] })]),
-      { from: FROM, horizonMonths: 24, discount: 0.15 },
-    )
-    // net worth is huge, but the goal's own box can't cover it
-    expect(plan.items[0].reachYear).toBeNull()
-    expect(plan.items[0].captured).toBe(0)
-  })
-
-  it('captures less the later a goal lands, but never more than its potential', () => {
-    const b = box({ openingBalance: 0 })
-    const plan = planGoals(
-      world([b], [goal({ id: 'g', cost: 9000, value: 6 })], [salary(b.id, 1000)]),
-      { from: FROM, horizonMonths: 24, discount: 0.2 },
-    )
-    const it0 = plan.items[0]
-    expect(it0.reachYear).toBeGreaterThan(0)
-    expect(it0.captured).toBeGreaterThan(0)
-    expect(it0.captured).toBeLessThan(it0.potential) // discounted by the wait
-  })
-
-  it('with no discount, potential equals rating × horizon years', () => {
-    const b = box({ openingBalance: 100_000 })
-    const plan = planGoals(world([b], [goal({ id: 'g', cost: 1000, value: 5 })]), {
-      from: FROM,
-      horizonMonths: 12,
-      discount: 0,
-    })
-    // 5 joy/yr for 1 year, achieved today → ~5
-    expect(plan.items[0].potential).toBeCloseTo(5, 1)
-    expect(plan.items[0].captured).toBeCloseTo(5, 1)
-  })
-
-  it('skips fulfilled goals', () => {
-    const b = box({ openingBalance: 100_000 })
-    const plan = planGoals(
-      world([b], [goal({ id: 'done', cost: 1000, value: 5, status: 'done' })]),
-      { from: FROM, horizonMonths: 12 },
-    )
-    expect(plan.items).toHaveLength(0)
+  it('ignores goals that aren\'t open', () => {
+    const open = goal({ id: 'open', cost: 10 })
+    const done = goal({ id: 'done', cost: 10, status: 'done', doneDate: NOW })
+    const shelved = goal({ id: 'shelved', cost: 10, status: 'dismissed' })
+    const plan = planGoals([open, done, shelved], 1000, opts)
+    expect(plan.chosen.map((c) => c.goal.id)).toEqual(['open'])
   })
 })

@@ -1,6 +1,15 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Box, CurrencyMeta, Effect, FinanceState, Goal, GoalStatus, Settings, Transaction } from '@/domain'
+import type {
+  Box,
+  CurrencyMeta,
+  Effect,
+  FinanceState,
+  Goal,
+  GoalStatus,
+  Settings,
+  Transaction,
+} from '@/domain'
 import { setCustomCurrencies } from '@/domain'
 import { newId } from '@/lib/id'
 import { todayISO } from '@/lib/date'
@@ -8,7 +17,7 @@ import { createEmpty, createSeed } from './seed'
 
 type NewBox = Omit<Box, 'id' | 'createdAt'>
 type NewTransaction = Omit<Transaction, 'id' | 'createdAt'>
-type NewGoal = Omit<Goal, 'id' | 'createdAt' | 'status'> & { status?: GoalStatus }
+type NewGoal = Omit<Goal, 'id' | 'createdAt'>
 
 interface Actions {
   addBox: (box: NewBox) => string
@@ -25,6 +34,8 @@ interface Actions {
   addGoal: (goal: NewGoal) => string
   updateGoal: (id: string, patch: Partial<Goal>) => void
   removeGoal: (id: string) => void
+  /** Mark a goal achieved / shelved / wanted again, stamping the achieved date. */
+  setGoalStatus: (id: string, status: GoalStatus, doneDate?: string) => void
 
   updateSettings: (patch: Partial<Settings>) => void
   setRate: (code: string, rate: number) => void
@@ -41,7 +52,6 @@ interface Actions {
 export type Store = FinanceState & Actions
 
 const now = () => new Date().toISOString()
-const CREATED_FALLBACK = '2025-09-01T10:00:00.000Z'
 
 export const useStore = create<Store>()(
   persist(
@@ -63,10 +73,6 @@ export const useStore = create<Store>()(
           // drop any transactions that referenced the box
           transactions: s.transactions.filter(
             (t) => t.boxId !== id && t.toBoxId !== id,
-          ),
-          // and unlink it from any goal it was funding
-          goals: s.goals.map((g) =>
-            g.boxIds.includes(id) ? { ...g, boxIds: g.boxIds.filter((b) => b !== id) } : g,
           ),
         })),
 
@@ -106,16 +112,28 @@ export const useStore = create<Store>()(
 
       addGoal: (goal) => {
         const id = newId('goal')
-        set((s) => ({
-          goals: [...s.goals, { ...goal, status: goal.status ?? 'open', id, createdAt: now() }],
-        }))
+        set((s) => ({ goals: [...s.goals, { ...goal, id, createdAt: now() }] }))
         return id
       },
       updateGoal: (id, patch) =>
         set((s) => ({
           goals: s.goals.map((g) => (g.id === id ? { ...g, ...patch } : g)),
         })),
-      removeGoal: (id) => set((s) => ({ goals: s.goals.filter((g) => g.id !== id) })),
+      removeGoal: (id) =>
+        set((s) => ({ goals: s.goals.filter((g) => g.id !== id) })),
+      setGoalStatus: (id, status, doneDate) =>
+        set((s) => ({
+          goals: s.goals.map((g) =>
+            g.id !== id
+              ? g
+              : {
+                  ...g,
+                  status,
+                  // stamp the achieved date when completing; clear it otherwise
+                  doneDate: status === 'done' ? (doneDate ?? g.doneDate ?? todayISO()) : undefined,
+                },
+          ),
+        })),
 
       updateSettings: (patch) =>
         set((s) => ({ settings: { ...s.settings, ...patch } })),
@@ -151,6 +169,12 @@ export const useStore = create<Store>()(
     {
       name: 'cozy-money/v1',
       version: 2,
+      // Older saves predate goals — fold in an empty list so the engine is safe.
+      migrate: (persisted, version) => {
+        const s = persisted as Partial<FinanceState>
+        if (version < 2 && !s.goals) s.goals = []
+        return s as FinanceState
+      },
       // persist only the data, never the action functions
       partialize: (s): FinanceState => ({
         boxes: s.boxes,
@@ -158,28 +182,6 @@ export const useStore = create<Store>()(
         goals: s.goals,
         settings: s.settings,
       }),
-      // v1 goals were bare net-worth targets; carry them into the richer shape.
-      migrate: (persisted, version) => {
-        const state = persisted as Partial<FinanceState> | undefined
-        if (state?.goals && version < 2) {
-          state.goals = state.goals.map((g) => {
-            const old = g as { target?: number; cost?: number; value?: Goal['value'] } & Goal
-            return {
-              id: old.id,
-              label: old.label ?? 'Goal',
-              cost: old.cost ?? old.target ?? 0,
-              value: old.value ?? 5,
-              boxIds: old.boxIds ?? [],
-              color: old.color,
-              note: old.note,
-              status: old.status ?? 'open',
-              completedDate: old.completedDate,
-              createdAt: old.createdAt ?? CREATED_FALLBACK,
-            }
-          })
-        }
-        return state as FinanceState
-      },
       // Fold the persisted custom currencies back into the live catalogue once
       // storage rehydrates, so lookups/formatting see the user's edits.
       onRehydrateStorage: () => (state) => {

@@ -145,32 +145,44 @@ export interface Transaction {
   createdAt: ISODateTime
 }
 
-/**
- * A breakpoint on a goal's worth-over-time curve: from `date` onward its rating
- * holds `value` until the next point. Lets a goal matter more in some seasons
- * than others ("worth 9 this year, 4 once the moment passes").
- */
-export interface ValuePoint {
-  date: ISODate
-  value: number // happiness rating, ~0..10
+/** Where a goal sits in its life: still wanted, achieved, or shelved. */
+export type GoalStatus = 'open' | 'done' | 'dismissed'
+
+/** One step of a goal's worth over time: this rating holds from `from` onward. */
+export interface GoalRatingPoint {
+  from: ISODate
+  rating: number // happiness per period, 0..10
 }
 
-/** A goal's worth as happiness: a flat rating, or a step curve that shifts over time. */
-export type GoalValue = number | ValuePoint[]
+/**
+ * How much happiness a goal is worth — and when.
+ * - `flat`: one rating, forever.
+ * - `periods`: a step curve. Each point's rating holds until the next; the
+ *   first extends backward, the last extends on. Lets a goal matter more in
+ *   some seasons of life than others.
+ */
+export type GoalValue =
+  | { type: 'flat'; rating: number }
+  | { type: 'periods'; points: GoalRatingPoint[] }
 
-/** `open` — still wanted. `done` — fulfilled, archived but kept (never deleted). */
-export type GoalStatus = 'open' | 'done'
-
+/**
+ * Something worth money that buys happiness. The optimizer spends a limited
+ * budget across goals to maximise total happiness; achieving one draws its
+ * `cost` from the boxes funding it. Goals are kept for good — done or shelved,
+ * never deleted out from under their history.
+ */
 export interface Goal {
   id: string
-  label: string
-  cost: number // base currency — what it takes to fulfil
-  value: GoalValue // happiness rating: a flat number, or points that change over time
-  boxIds: string[] // funding boxes; empty = the whole net worth backs it
-  color?: string
-  note?: string
+  name: string
+  cost: number // base currency
+  value: GoalValue
+  /** boxes that fund it — where the spend is drawn from when achieved */
+  boxIds: string[]
   status: GoalStatus
-  completedDate?: ISODate // when it was marked done, kept for the record
+  /** when it was achieved (status 'done') — drives the deduction + marker */
+  doneDate?: ISODate
+  color: string
+  note?: string
   createdAt: ISODateTime
 }
 
@@ -180,8 +192,8 @@ export interface Settings {
   rates: Record<CurrencyCode, number>
   /** global annual inflation used to discount the whole net worth in the "real" view */
   inflation?: number
-  /** how fast future happiness fades vs today's, per year — the goal "patience" knob (default 0.15) */
-  happinessDiscount?: number
+  /** sooner counts more: a goal's worth halves every this-many months further out */
+  happinessHalfLifeMonths?: number
   /**
    * User edits to the currency catalogue: brand-new custom currencies *and*
    * overrides of built-in ones (matched by `code`). Merged over the JSON

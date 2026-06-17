@@ -1,13 +1,19 @@
 import { useMemo } from 'react'
 import {
+  bankedHappiness,
   boxValueAt,
+  goalFundingBoxes,
+  goalFundingBudget,
   mergeCurrencies,
   netWorthAt,
   planGoals,
   project,
   type CurrencyMeta,
   type FinanceState,
+  type Goal,
+  type GoalFundingBox,
   type GoalPlan,
+  type HappinessOptions,
   type ProjectionOptions,
   type ProjectionResult,
 } from '@/domain'
@@ -29,6 +35,42 @@ export function useFinanceState(): FinanceState {
 export function useActiveBoxes() {
   const boxes = useStore((s) => s.boxes)
   return useMemo(() => boxes.filter((b) => !b.archived), [boxes])
+}
+
+export function useGoals(): Goal[] {
+  return useStore((s) => s.goals)
+}
+
+/** The greedy plan over the open goals for a given budget + weighting. */
+export function useGoalPlan(budget: number, opts: HappinessOptions): GoalPlan {
+  const goals = useGoals()
+  return useMemo(
+    () => planGoals(goals, budget, opts),
+    [goals, budget, opts.now, opts.horizon, opts.halfLifeMonths],
+  )
+}
+
+/** The planner's budget: live base value of the boxes funding open goals. */
+export function useGoalBudget(dateISO?: string): number {
+  const state = useFinanceState()
+  const date = dateISO ?? todayISO()
+  return useMemo(() => goalFundingBudget(state, date), [state, date])
+}
+
+/** The boxes backing open goals, each valued today in the base currency. */
+export function useGoalFundingBoxes(dateISO?: string): GoalFundingBox[] {
+  const state = useFinanceState()
+  const date = dateISO ?? todayISO()
+  return useMemo(() => goalFundingBoxes(state, date), [state, date])
+}
+
+/** Happiness already banked from achieved goals. */
+export function useBankedHappiness(opts: HappinessOptions): number {
+  const goals = useGoals()
+  return useMemo(
+    () => bankedHappiness(goals, opts),
+    [goals, opts.now, opts.horizon, opts.halfLifeMonths],
+  )
 }
 
 /** The live currency catalogue (defaults + the user's edits), in display order. */
@@ -61,15 +103,5 @@ export function useProjection(opts: ProjectionOptions): ProjectionResult {
   return useMemo(
     () => project(state, opts),
     [state, opts.from, opts.to, opts.steps],
-  )
-}
-
-/** The greedy goal plan over a horizon (months), recomputed when inputs change. */
-export function useGoalPlan(horizonMonths: number, discount?: number): GoalPlan {
-  const state = useFinanceState()
-  const from = todayISO()
-  return useMemo(
-    () => planGoals(state, { from, horizonMonths, discount }),
-    [state, from, horizonMonths, discount],
   )
 }

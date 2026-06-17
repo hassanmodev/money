@@ -1,10 +1,9 @@
-import { Flag } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useMemo, useState } from 'react'
 import { project } from '@/domain'
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
-import { addMonthsISO, fmtDate, todayISO } from '@/lib/date'
+import { addMonthsISO, todayISO } from '@/lib/date'
 import { fmtSignedPercent } from '@/lib/format'
 import { useActiveBoxes, useFinanceState, useProjection } from '@/store/selectors'
 import { useStore } from '@/store/store'
@@ -209,26 +208,6 @@ export default function PlanningPage() {
         />
       </Card>
 
-      {result.milestones.length > 0 && (
-        <Card className="mt-4 p-5">
-          <h3 className="mb-3 font-serif text-lg text-ink">Milestones along the way</h3>
-          <div className="flex flex-col gap-2.5">
-            {result.milestones.map((m) => (
-              <div key={m.id} className="flex items-center gap-3">
-                <div className="grid size-8 place-items-center rounded-lg bg-honey/15 text-honey">
-                  <Flag className="size-4" />
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm text-ink">{m.label}</div>
-                  <div className="text-xs text-faint">
-                    reaches <Money amount={m.value} compact className="text-muted" /> by {fmtDate(m.date)}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
     </Page>
   )
 }

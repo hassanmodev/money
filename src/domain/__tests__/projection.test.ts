@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { boxValueAt, netWorthAt, project } from '../projection'
-import type { Box, Effect, FinanceState, Settings, Transaction } from '../types'
+import type { Box, Effect, FinanceState, Goal, Settings, Transaction } from '../types'
 
 const settings: Settings = { baseCurrency: 'EUR', rates: { USD: 0.9 } }
 
@@ -25,10 +25,10 @@ const interest = (rate: number): Effect => ({
   compounding: 'annually',
 })
 
-const state = (boxes: Box[], transactions: Transaction[] = []): FinanceState => ({
+const state = (boxes: Box[], transactions: Transaction[] = [], goals: FinanceState['goals'] = []): FinanceState => ({
   boxes,
   transactions,
-  goals: [],
+  goals,
   settings,
 })
 
@@ -181,25 +181,57 @@ describe('forwarding', () => {
   })
 })
 
-describe('milestones', () => {
-  it('flags when a goal target is first reached', () => {
-    const s: FinanceState = {
-      ...state([box({ openingBalance: 1000, effects: [interest(0.2)] })]),
-      goals: [
-        {
-          id: 'g1',
-          label: 'First 2k',
-          cost: 2000,
-          value: 5,
-          boxIds: [],
-          status: 'open',
-          createdAt: '2026-01-01T00:00:00Z',
-        },
-      ],
-    }
-    const r = project(s, { from: '2026-01-01', to: '2036-01-01' })
-    const goal = r.milestones.find((m) => m.id === 'goal-g1')
-    expect(goal).toBeDefined()
-    expect(goal!.value).toBe(2000)
+describe('achieved goals draw down net worth', () => {
+  const goal = (g: Partial<Goal>): Goal => ({
+    id: 'goal',
+    name: 'Trip',
+    cost: 300,
+    value: { type: 'flat', rating: 7 },
+    boxIds: [],
+    status: 'done',
+    doneDate: '2026-03-01',
+    color: '#9eb87f',
+    createdAt: '2026-01-01T00:00:00Z',
+    ...g,
+  })
+
+  it('subtracts a done goal from its funding box', () => {
+    const sav = box({ id: 'sav', openingBalance: 1000 })
+    const world = state([sav], [], [goal({ boxIds: ['sav'] })])
+    expect(netWorthAt(world, '2026-02-01')).toBeCloseTo(1000, 6) // before it's achieved
+    expect(netWorthAt(world, '2026-06-01')).toBeCloseTo(700, 6) // 1000 − 300
+    expect(boxValueAt(world, 'sav', '2026-06-01')).toBeCloseTo(700, 6)
+  })
+
+  it('splits the spend across several funding boxes', () => {
+    const a = box({ id: 'a', openingBalance: 500 })
+    const b = box({ id: 'b', openingBalance: 500 })
+    const world = state([a, b], [], [goal({ cost: 400, boxIds: ['a', 'b'] })])
+    expect(boxValueAt(world, 'a', '2026-06-01')).toBeCloseTo(300, 6) // 500 − 200
+    expect(boxValueAt(world, 'b', '2026-06-01')).toBeCloseTo(300, 6)
+  })
+
+  it('a goal with no funding box is advisory only — nothing is drawn', () => {
+    const sav = box({ id: 'sav', openingBalance: 1000 })
+    const world = state([sav], [], [goal({ boxIds: [] })])
+    expect(netWorthAt(world, '2026-06-01')).toBeCloseTo(1000, 6)
+  })
+
+  it('open and shelved goals never touch the projection', () => {
+    const sav = box({ id: 'sav', openingBalance: 1000 })
+    const world = state([sav], [], [
+      goal({ id: 'g1', status: 'open', boxIds: ['sav'] }),
+      goal({ id: 'g2', status: 'dismissed', boxIds: ['sav'] }),
+    ])
+    expect(netWorthAt(world, '2026-06-01')).toBeCloseTo(1000, 6)
+  })
+
+  it('surfaces achieved goals as markers within the horizon', () => {
+    const sav = box({ id: 'sav', openingBalance: 1000 })
+    const world = state([sav], [], [goal({ boxIds: ['sav'] })])
+    const r = project(world, { from: '2026-01-01', to: '2026-12-31' })
+    expect(r.markers).toHaveLength(1)
+    expect(r.markers[0]).toMatchObject({ id: 'goal', date: '2026-03-01', cost: 300 })
   })
 })
+

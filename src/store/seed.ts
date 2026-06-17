@@ -1,5 +1,5 @@
 /** Pleasant demo data so the app feels alive on first run. */
-import type { FinanceState } from '@/domain'
+import type { FinanceState, Goal } from '@/domain'
 
 const CREATED = '2025-09-01T10:00:00.000Z'
 
@@ -11,9 +11,9 @@ export function createEmpty(): FinanceState {
       rates: { EUR: 1 },
       inflation: 0,
     },
-    goals: [],
     boxes: [],
     transactions: [],
+    goals: [],
   }
 }
 
@@ -25,46 +25,8 @@ export function createSeed(): FinanceState {
       // value of 1 unit in EUR
       rates: { EUR: 1, USD: 0.92, GBP: 1.17, CHF: 1.04, BTC: 92000, XAU: 2400 },
       inflation: 0.025,
+      happinessHalfLifeMonths: 24,
     },
-    goals: [
-      {
-        id: 'goal-fund',
-        label: 'Emergency fund',
-        cost: 15000,
-        value: 9, // safety first — steadily worth a lot
-        boxIds: ['box-savings'],
-        color: '#9eb87f',
-        note: 'Six months of breathing room.',
-        status: 'open',
-        createdAt: CREATED,
-      },
-      {
-        id: 'goal-trip',
-        label: 'Big trip',
-        cost: 6000,
-        // worth the most while we're young enough to enjoy it; fades later
-        value: [
-          { date: '2026-01-01', value: 8 },
-          { date: '2028-01-01', value: 5 },
-          { date: '2031-01-01', value: 2 },
-        ],
-        boxIds: ['box-checking', 'box-savings'],
-        color: '#74b1a3',
-        status: 'open',
-        createdAt: CREATED,
-      },
-      {
-        id: 'goal-house',
-        label: 'House deposit',
-        cost: 60000,
-        value: 10,
-        boxIds: ['box-savings', 'box-brokerage'],
-        color: '#d4845c',
-        note: 'The big one.',
-        status: 'open',
-        createdAt: CREATED,
-      },
-    ],
     boxes: [
       {
         id: 'box-cash',
@@ -175,6 +137,57 @@ export function createSeed(): FinanceState {
       o('tx-r6', 'income', 'box-checking', 450, 'salary', '2026-05-20', 'Side gig'),
       o('tx-r7', 'expense', 'box-checking', 120, 'fun', '2026-05-16', 'Live show'),
     ],
+    goals: [
+      g('goal-japan', 'Two weeks in Japan', 4800, 9, ['box-savings'], '#db8a82', 'The big one.'),
+      g('goal-laptop', 'New laptop', 1900, 6, ['box-savings'], '#8aa0c8'),
+      {
+        id: 'goal-bike',
+        name: 'Road bike',
+        cost: 1300,
+        // Worth a lot through the summer, much less once the rain sets in.
+        value: {
+          type: 'periods',
+          points: [
+            { from: '2026-06-01', rating: 7 },
+            { from: '2026-10-01', rating: 3 },
+            { from: '2027-05-01', rating: 7 },
+          ],
+        },
+        boxIds: ['box-savings'],
+        status: 'open',
+        color: '#9eb87f',
+        createdAt: CREATED,
+      },
+      {
+        ...g('goal-desk', 'Standing desk', 520, 5, ['box-checking'], '#74b1a3'),
+        status: 'done',
+        doneDate: '2026-04-15',
+      },
+      { ...g('goal-watch', 'Vintage watch', 3200, 4, [], '#cba24f', 'Maybe one day.'), status: 'dismissed' },
+    ],
+  }
+}
+
+/** A flat-rated goal — the common case. */
+function g(
+  id: string,
+  name: string,
+  cost: number,
+  rating: number,
+  boxIds: string[],
+  color: string,
+  note?: string,
+): Goal {
+  return {
+    id,
+    name,
+    cost,
+    value: { type: 'flat', rating },
+    boxIds,
+    status: 'open',
+    color,
+    note,
+    createdAt: CREATED,
   }
 }
 

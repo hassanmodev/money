@@ -132,7 +132,7 @@ export default function SettingsPage() {
         open={confirmClear}
         onOpenChange={setConfirmClear}
         title="Clear everything?"
-        description="This removes all boxes, transactions, goals, and custom currencies, and resets settings to defaults. This can't be undone."
+        description="This removes all boxes, transactions, and custom currencies, and resets settings to defaults. This can't be undone."
         confirmLabel="Clear all"
         danger
         onConfirm={clearAll}
