@@ -5,7 +5,9 @@ import {
   distanceWeight,
   goalHappiness,
   planGoals,
+  planGoalsScheduled,
   type HappinessOptions,
+  type ScheduleOptions,
 } from '../goals'
 import type { Goal } from '../types'
 
@@ -113,5 +115,67 @@ describe('planGoals (greedy knapsack)', () => {
     const shelved = goal({ id: 'shelved', cost: 10, status: 'dismissed' })
     const plan = planGoals([open, done, shelved], 1000, opts)
     expect(plan.chosen.map((c) => c.goal.id)).toEqual(['open'])
+  })
+})
+
+describe('planGoalsScheduled (time-aware planner)', () => {
+  // A yearly grid out to the horizon; no decay keeps the arithmetic legible.
+  const grid = ['2026-01-01', '2027-01-01', '2028-01-01', '2029-01-01']
+  const flat = (now = NOW, halfLifeMonths = 0): Omit<ScheduleOptions, 'budgetCurve'> => ({
+    now,
+    horizon: HORIZON,
+    halfLifeMonths,
+    grid,
+  })
+
+  it('with a flat (non-growing) pot, matches the greedy knapsack and buys now', () => {
+    const free = goal({ id: 'free', cost: 0, value: { type: 'flat', rating: 4 } })
+    const rich = goal({ id: 'rich', cost: 100, value: { type: 'flat', rating: 9 } })
+    const poor = goal({ id: 'poor', cost: 100, value: { type: 'flat', rating: 3 } })
+    const o: ScheduleOptions = { ...flat(), budgetCurve: [150, 150, 150, 150] }
+    const plan = planGoalsScheduled([free, rich, poor], o)
+
+    expect(plan.scheduled.map((s) => s.goal.id).sort()).toEqual(['free', 'rich'])
+    expect(plan.scheduled.every((s) => s.achieveDate === NOW)).toBe(true) // sooner always wins
+    expect(plan.dropped.map((d) => d.goal.id)).toEqual(['poor'])
+    expect(plan.spend).toBe(100)
+  })
+
+  it('defers a goal it can\'t afford yet until the pot grows into it', () => {
+    const big = goal({ id: 'big', cost: 200, value: { type: 'flat', rating: 5 } })
+    const o: ScheduleOptions = { ...flat(), budgetCurve: [100, 150, 250, 300] }
+    const plan = planGoalsScheduled([big], o)
+
+    expect(plan.dropped).toHaveLength(0)
+    expect(plan.scheduled).toHaveLength(1)
+    expect(plan.scheduled[0].achieveDate).toBe('2028-01-01') // first date pot ≥ 200
+  })
+
+  it('defers the densest goal so a second one also fits — beating buy-it-now', () => {
+    // Pot ~5×s over the horizon. Buying g1 now drains all future growth and
+    // strands g2; waiting one year lets both land, for more total happiness.
+    const g1 = goal({ id: 'g1', cost: 100, value: { type: 'flat', rating: 10 } })
+    const g2 = goal({ id: 'g2', cost: 100, value: { type: 'flat', rating: 8 } })
+    const o: ScheduleOptions = { ...flat(), budgetCurve: [100, 200, 350, 500] }
+    const plan = planGoalsScheduled([g1, g2], o)
+
+    expect(plan.scheduled.map((s) => s.goal.id).sort()).toEqual(['g1', 'g2'])
+    expect(plan.dropped).toHaveLength(0)
+    expect(plan.scheduled.every((s) => s.achieveDate !== NOW)).toBe(true) // both deferred to fit
+
+    // and it genuinely beats spending everything on the densest goal today
+    const buyNowOnly = goalHappiness(g1, NOW, o)
+    expect(plan.happiness).toBeGreaterThan(buyNowOnly)
+  })
+
+  it('schedules free goals immediately and drops worthless ones', () => {
+    const free = goal({ id: 'free', cost: 0, value: { type: 'flat', rating: 6 } })
+    const worthless = goal({ id: 'worthless', cost: 10, value: { type: 'flat', rating: 0 } })
+    const o: ScheduleOptions = { ...flat(), budgetCurve: [100, 100, 100, 100] }
+    const plan = planGoalsScheduled([free, worthless], o)
+
+    expect(plan.scheduled.map((s) => s.goal.id)).toEqual(['free'])
+    expect(plan.scheduled[0].achieveDate).toBe(NOW)
+    expect(plan.dropped.map((d) => [d.goal.id, d.reason])).toEqual([['worthless', 'not-worth-it']])
   })
 })

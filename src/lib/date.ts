@@ -1,4 +1,5 @@
 import {
+  addDays,
   addMonths,
   addYears,
   differenceInCalendarDays,
@@ -22,6 +23,9 @@ export const fmtDate = (iso: ISODate, fmt = 'MMM d, yyyy'): string =>
 export const fmtDateShort = (iso: ISODate): string => format(parseISO(iso), 'MMM d')
 
 export const fmtMonthYear = (iso: ISODate): string => format(parseISO(iso), 'MMM yyyy')
+
+export const addDaysISO = (iso: ISODate, days: number): ISODate =>
+  toISO(addDays(parseISO(iso), days))
 
 export const addMonthsISO = (iso: ISODate, months: number): ISODate =>
   toISO(addMonths(parseISO(iso), months))

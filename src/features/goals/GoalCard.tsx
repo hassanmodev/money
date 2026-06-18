@@ -3,15 +3,16 @@ import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { RatingCurve, distanceWeight, type Goal } from '@/domain'
 import { cn } from '@/lib/cn'
-import { fmtDate, todayISO } from '@/lib/date'
+import { fmtDate } from '@/lib/date'
 import { hexToRgba } from '@/lib/palette'
 import { useActiveBoxes } from '@/store/selectors'
+import { useViewDate } from '@/store/time'
 import { useStore } from '@/store/store'
 import { Button, Card, Chip, ConfirmDialog, Menu, MenuItem, Money, Sparkline } from '@/ui'
 import { MAX_RATING, STATUS_META } from './goal-meta'
 
-function ratingSeries(goal: Goal, halfLifeMonths: number): number[] {
-  const curve = new RatingCurve(goal.value, todayISO())
+function ratingSeries(goal: Goal, halfLifeMonths: number, now: string): number[] {
+  const curve = new RatingCurve(goal.value, now)
   return Array.from({ length: 25 }, (_, m) => {
     const years = m / 12
     return curve.rateAt(years) * distanceWeight(years, halfLifeMonths)
@@ -34,6 +35,7 @@ export function GoalCard({
   const setGoalStatus = useStore((s) => s.setGoalStatus)
   const removeGoal = useStore((s) => s.removeGoal)
   const boxes = useActiveBoxes()
+  const now = useViewDate()
   const [confirm, setConfirm] = useState(false)
 
   const meta = STATUS_META[goal.status]
@@ -114,7 +116,7 @@ export function GoalCard({
           </div>
         </div>
 
-        <Sparkline data={ratingSeries(goal, halfLifeMonths)} color={goal.color} width={320} height={32} className="w-full" />
+        <Sparkline data={ratingSeries(goal, halfLifeMonths, now)} color={goal.color} width={320} height={32} className="w-full" />
 
         <div className="mt-auto flex min-h-[1.625rem] flex-wrap items-center gap-1.5">
           {badge}

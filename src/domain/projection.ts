@@ -321,3 +321,26 @@ export function goalFundingBoxes(state: FinanceState, dateISO: ISODate): GoalFun
 export function goalFundingBudget(state: FinanceState, dateISO: ISODate): number {
   return goalFundingBoxes(state, dateISO).reduce((sum, f) => sum + f.base, 0)
 }
+
+/**
+ * The funding pot's *trajectory* (base currency) across `grid` — the same boxes
+ * {@link goalFundingBudget} sums, but valued at every grid date so the
+ * time-aware planner can see the budget grow. No open-goal spends are baked in
+ * (those are what the planner is deciding); spends from already-achieved goals
+ * are, since they've really left. Returns zeros when nothing funds open goals.
+ */
+export function goalBudgetCurve(state: FinanceState, grid: ISODate[]): number[] {
+  const ids = new Set<string>()
+  for (const g of state.goals ?? []) {
+    if (g.status !== 'open') continue
+    for (const id of g.boxIds) ids.add(id)
+  }
+  if (ids.size === 0 || grid.length === 0) return grid.map(() => 0)
+  const active = state.boxes.filter((b) => !b.archived)
+  const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], active, state.settings.baseCurrency)]
+  const series = simulate(active, txns, state.settings, grid.map((d) => parseISO(d).getTime()))
+  const funders = active.filter((b) => ids.has(b.id))
+  return grid.map((_, i) =>
+    funders.reduce((sum, b) => sum + toBase(series[b.id][i], b.currency, state.settings), 0),
+  )
+}

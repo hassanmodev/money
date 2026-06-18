@@ -3,10 +3,11 @@ import { useMemo, useState } from 'react'
 import { project } from '@/domain'
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
-import { addMonthsISO, todayISO } from '@/lib/date'
+import { addMonthsISO } from '@/lib/date'
 import { fmtSignedPercent } from '@/lib/format'
 import { useActiveBoxes, useFinanceState, useProjection } from '@/store/selectors'
 import { useStore } from '@/store/store'
+import { useViewDate } from '@/store/time'
 import { Card, Chip, Money, Segmented } from '@/ui'
 import { HorizonControl } from './HorizonControl'
 import { horizonLabel } from './horizon'
@@ -43,7 +44,7 @@ export default function PlanningPage() {
   const [months, setMonths] = useState(12)
   const [mode, setMode] = useState<'nominal' | 'real'>('nominal')
 
-  const from = todayISO()
+  const from = useViewDate()
   const to = addMonthsISO(from, months)
   const opts = useMemo(() => ({ from, to, steps: 120 }), [from, to])
   const result = useProjection(opts)

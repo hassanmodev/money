@@ -4,8 +4,9 @@ import { useMemo, useState } from 'react'
 import { goalHappiness, type Goal, type HappinessOptions } from '@/domain'
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
-import { addMonthsISO, todayISO } from '@/lib/date'
-import { useActiveBoxes, useBankedHappiness, useGoalBudget, useGoalFundingBoxes, useGoalPlan, useGoals } from '@/store/selectors'
+import { addMonthsISO, fmtMonthYear } from '@/lib/date'
+import { useActiveBoxes, useBankedHappiness, useGoalBudget, useGoalFundingBoxes, useGoals, useScheduledPlan } from '@/store/selectors'
+import { useViewDate } from '@/store/time'
 import { useStore } from '@/store/store'
 import { Button, Card, Chip, Money, Segmented } from '@/ui'
 import { GoalCard } from './GoalCard'
@@ -56,7 +57,7 @@ export default function GoalsPage() {
   const setGoalStatus = useStore((s) => s.setGoalStatus)
   const boxes = useActiveBoxes()
 
-  const now = todayISO()
+  const now = useViewDate()
   const horizon = addMonthsISO(now, HORIZON_MONTHS)
   const halfLifeMonths = settings.happinessHalfLifeMonths ?? 24
   const opts: HappinessOptions = useMemo(
@@ -70,9 +71,14 @@ export default function GoalsPage() {
   const funding = useGoalFundingBoxes()
   const boxById = useMemo(() => new Map(boxes.map((b) => [b.id, b])), [boxes])
 
-  const plan = useGoalPlan(budget, opts)
+  const plan = useScheduledPlan(opts)
   const banked = useBankedHappiness(opts)
-  const chosenIds = useMemo(() => new Set(plan.chosen.map((c) => c.goal.id)), [plan])
+  const scheduledById = useMemo(
+    () => new Map(plan.scheduled.map((s) => [s.goal.id, s])),
+    [plan],
+  )
+  // "Now" if achieved today, else the month it lands in.
+  const whenLabel = (achieveDate: string) => (achieveDate <= now ? 'Now' : fmtMonthYear(achieveDate))
 
   const [chartMode, setChartMode] = useState<'banked' | 'plan'>('plan')
   const [editorOpen, setEditorOpen] = useState(false)
@@ -92,21 +98,21 @@ export default function GoalsPage() {
       .filter((g) => g.status === 'done' && g.doneDate)
       .map((g) => ({ id: g.id, name: g.name, color: g.color, achieveDate: g.doneDate!, value: g.value }))
     if (chartMode === 'banked') return done
-    const planned: HappinessTrack[] = plan.chosen.map((c) => ({
-      id: c.goal.id,
-      name: c.goal.name,
-      color: c.goal.color,
-      achieveDate: now,
-      value: c.goal.value,
+    const planned: HappinessTrack[] = plan.scheduled.map((s) => ({
+      id: s.goal.id,
+      name: s.goal.name,
+      color: s.goal.color,
+      achieveDate: s.achieveDate,
+      value: s.goal.value,
       planned: true,
     }))
     return [...done, ...planned]
-  }, [goals, plan, chartMode, now])
+  }, [goals, plan, chartMode])
 
   const openCount = goals.filter((g) => g.status === 'open').length
   const maxDensity = Math.max(
     0,
-    ...[...plan.chosen, ...plan.skipped].map((s) => (Number.isFinite(s.density) ? s.density : 0)),
+    ...[...plan.scheduled, ...plan.dropped].map((s) => (Number.isFinite(s.density) ? s.density : 0)),
   )
 
   if (goals.length === 0) {
@@ -187,15 +193,15 @@ export default function GoalsPage() {
         <div className="mb-1 flex items-center justify-between gap-3">
           <h2 className="font-serif text-lg text-ink">Best plan</h2>
           <span className="text-xs text-faint">
-            within <Money amount={budget} compact /> · greedy by happiness per cost
+            within <Money amount={budget} compact /> · waits when the pot can grow into more
           </span>
         </div>
 
-        {plan.chosen.length === 0 && plan.skipped.length === 0 ? (
+        {plan.scheduled.length === 0 && plan.dropped.length === 0 ? (
           <p className="py-4 text-sm text-faint">No open goals to plan. Add one, or reopen a shelved goal.</p>
         ) : (
           <div className="mt-3 flex flex-col">
-            {plan.chosen.map((s, i) => (
+            {plan.scheduled.map((s, i) => (
               <PlanRow
                 key={s.goal.id}
                 rank={i + 1}
@@ -204,13 +210,14 @@ export default function GoalsPage() {
                 happiness={s.happiness}
                 density={s.density}
                 maxDensity={maxDensity}
+                when={whenLabel(s.achieveDate)}
                 onAchieve={() => setGoalStatus(s.goal.id, 'done')}
               />
             ))}
-            {plan.skipped.length > 0 && (
+            {plan.dropped.length > 0 && (
               <div className="mt-3 border-t border-line pt-3">
-                <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-faint">Beyond the budget</div>
-                {plan.skipped.map((s) => (
+                <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-faint">Won’t fit in time</div>
+                {plan.dropped.map((s) => (
                   <PlanRow
                     key={s.goal.id}
                     goal={s.goal}
@@ -218,6 +225,7 @@ export default function GoalsPage() {
                     happiness={s.happiness}
                     density={s.density}
                     maxDensity={maxDensity}
+                    note={s.reason === 'not-worth-it' ? 'no happiness' : 'over budget'}
                     dimmed
                   />
                 ))}
@@ -271,15 +279,16 @@ export default function GoalsPage() {
               {group.map((g, i) => {
                 const achieveDate = g.status === 'done' && g.doneDate ? g.doneDate : now
                 const happiness = goalHappiness(g, achieveDate, opts)
+                const scheduled = scheduledById.get(g.id)
                 const badge =
                   g.status === 'open' ? (
-                    chosenIds.has(g.id) ? (
+                    scheduled ? (
                       <Chip className="gap-1 border-sage/40 text-sage">
                         <Sparkles className="size-3" />
-                        In plan
+                        {whenLabel(scheduled.achieveDate)}
                       </Chip>
                     ) : (
-                      <Chip className="text-faint">Over budget</Chip>
+                      <Chip className="text-faint">Won’t fit</Chip>
                     )
                   ) : undefined
                 return (
@@ -311,6 +320,8 @@ function PlanRow({
   happiness,
   density,
   maxDensity,
+  when,
+  note,
   dimmed,
   onAchieve,
 }: {
@@ -320,6 +331,10 @@ function PlanRow({
   happiness: number
   density: number
   maxDensity: number
+  /** when the plan achieves it, e.g. "Now" or "Mar 2027" */
+  when?: string
+  /** why a dropped goal didn't make the cut */
+  note?: string
   dimmed?: boolean
   onAchieve?: () => void
 }) {
@@ -332,7 +347,15 @@ function PlanRow({
       <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: goal.color }} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm text-ink">{goal.name}</span>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-sm text-ink">{goal.name}</span>
+            {when && (
+              <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${when === 'Now' ? 'bg-sage/15 text-sage' : 'bg-raised text-muted'}`}>
+                {when}
+              </span>
+            )}
+            {note && <span className="shrink-0 text-[10px] uppercase tracking-[0.08em] text-faint">{note}</span>}
+          </div>
           <span className="shrink-0 text-xs tabular text-faint">
             <Money amount={cost} compact />
           </span>

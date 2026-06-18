@@ -4,9 +4,11 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 import { cn } from '@/lib/cn'
 import { useComposer } from '@/features/transactions/ComposerProvider'
 import { useNetWorth } from '@/store/selectors'
+import { useIsTimeTraveling } from '@/store/time'
 import { Button, Money } from '@/ui'
 import { BrandMark } from './BrandMark'
 import { NAV, type NavItemDef } from './nav'
+import { TimeScrubber } from './TimeScrubber'
 
 function NetWorthSummary() {
   const net = useNetWorth()
@@ -139,13 +141,31 @@ function MobileTabBar() {
   )
 }
 
+/** A whisper-thin glow pinned to the top of the viewport while time-travelling. */
+function TimeTravelHalo() {
+  const traveling = useIsTimeTraveling()
+  return (
+    <motion.div
+      aria-hidden
+      initial={false}
+      animate={{ opacity: traveling ? 1 : 0 }}
+      transition={{ duration: 0.4 }}
+      className="pointer-events-none fixed inset-x-0 top-0 z-50 h-px bg-gradient-to-r from-transparent via-clay to-transparent"
+    />
+  )
+}
+
 export function AppShell() {
   return (
     <div className="flex min-h-screen">
+      <TimeTravelHalo />
       <DesktopSidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <MobileHeader />
-        <main className="mx-auto w-full max-w-5xl flex-1 px-5 pb-28 pt-6 md:px-10 md:pb-16 md:pt-12">
+        <div className="sticky top-0 z-30">
+          <MobileHeader />
+          <TimeScrubber />
+        </div>
+        <main className="mx-auto w-full max-w-5xl flex-1 px-5 pb-28 pt-6 md:px-10 md:pb-16 md:pt-10">
           <Outlet />
         </main>
       </div>

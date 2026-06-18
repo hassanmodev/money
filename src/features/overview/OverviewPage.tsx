@@ -1,9 +1,10 @@
 import { ArrowUpRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Page } from '@/components/Page'
-import { addYearsISO, todayISO } from '@/lib/date'
+import { addYearsISO } from '@/lib/date'
 import { fmtSignedPercent } from '@/lib/format'
 import { useActiveBoxes, useBoxValue, useNetWorth, useProjection } from '@/store/selectors'
+import { useViewDate } from '@/store/time'
 import type { Box } from '@/domain'
 import { Card, Money, Sparkline } from '@/ui'
 import { boxIcon, KIND_LABEL } from '@/ui/icons'
@@ -19,7 +20,7 @@ function greeting() {
 
 function Hero() {
   const net = useNetWorth()
-  const from = todayISO()
+  const from = useViewDate()
   const proj = useProjection({ from, to: addYearsISO(from, 5), steps: 60 })
   const series = proj.points.map((p) => p.nominal)
   const growth = net > 0 ? proj.endNominal / net - 1 : 0

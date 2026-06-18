@@ -2,23 +2,28 @@ import { useMemo } from 'react'
 import {
   bankedHappiness,
   boxValueAt,
+  goalBudgetCurve,
   goalFundingBoxes,
   goalFundingBudget,
   mergeCurrencies,
   netWorthAt,
-  planGoals,
+  planGoalsScheduled,
   project,
   type CurrencyMeta,
   type FinanceState,
   type Goal,
   type GoalFundingBox,
-  type GoalPlan,
   type HappinessOptions,
   type ProjectionOptions,
   type ProjectionResult,
+  type ScheduledPlan,
 } from '@/domain'
-import { todayISO } from '@/lib/date'
+import { addMonthsISO, yearsBetween } from '@/lib/date'
 import { useStore } from './store'
+import { useTimeTravel } from './time'
+
+/** The app's notion of "now" — the time-travel cursor (defaults to today). */
+const useNow = () => useTimeTravel((s) => s.viewDate)
 
 /** The four data slices bundled into a memoized FinanceState. */
 export function useFinanceState(): FinanceState {
@@ -41,26 +46,34 @@ export function useGoals(): Goal[] {
   return useStore((s) => s.goals)
 }
 
-/** The greedy plan over the open goals for a given budget + weighting. */
-export function useGoalPlan(budget: number, opts: HappinessOptions): GoalPlan {
-  const goals = useGoals()
-  return useMemo(
-    () => planGoals(goals, budget, opts),
-    [goals, budget, opts.now, opts.horizon, opts.halfLifeMonths],
-  )
+/**
+ * The time-aware plan: each open goal gets an achieve-date along the funding
+ * pot's growth curve, deferring purchases when waiting unlocks more happiness.
+ * The grid is monthly from `now` out to the horizon.
+ */
+export function useScheduledPlan(opts: HappinessOptions): ScheduledPlan {
+  const state = useFinanceState()
+  return useMemo(() => {
+    const months = Math.max(1, Math.round(yearsBetween(opts.now, opts.horizon) * 12))
+    const grid = Array.from({ length: months + 1 }, (_, i) => addMonthsISO(opts.now, i))
+    const budgetCurve = goalBudgetCurve(state, grid)
+    return planGoalsScheduled(state.goals, { ...opts, grid, budgetCurve })
+  }, [state, opts.now, opts.horizon, opts.halfLifeMonths])
 }
 
 /** The planner's budget: live base value of the boxes funding open goals. */
 export function useGoalBudget(dateISO?: string): number {
   const state = useFinanceState()
-  const date = dateISO ?? todayISO()
+  const view = useNow()
+  const date = dateISO ?? view
   return useMemo(() => goalFundingBudget(state, date), [state, date])
 }
 
 /** The boxes backing open goals, each valued today in the base currency. */
 export function useGoalFundingBoxes(dateISO?: string): GoalFundingBox[] {
   const state = useFinanceState()
-  const date = dateISO ?? todayISO()
+  const view = useNow()
+  const date = dateISO ?? view
   return useMemo(() => goalFundingBoxes(state, date), [state, date])
 }
 
@@ -86,14 +99,16 @@ export function useBox(id: string | undefined) {
 /** Total net worth (base currency) on a date, defaulting to today. */
 export function useNetWorth(dateISO?: string): number {
   const state = useFinanceState()
-  const date = dateISO ?? todayISO()
+  const view = useNow()
+  const date = dateISO ?? view
   return useMemo(() => netWorthAt(state, date), [state, date])
 }
 
 /** A single box's value in its own currency on a date (default today). */
 export function useBoxValue(boxId: string, dateISO?: string): number {
   const state = useFinanceState()
-  const date = dateISO ?? todayISO()
+  const view = useNow()
+  const date = dateISO ?? view
   return useMemo(() => boxValueAt(state, boxId, date), [state, boxId, date])
 }
 
