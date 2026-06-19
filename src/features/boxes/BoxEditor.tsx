@@ -1,4 +1,4 @@
-import { Trash2 } from 'lucide-react'
+import { Target, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
   currencyMeta,
@@ -92,6 +92,7 @@ export function BoxEditor({
   const [effects, setEffects] = useState<Effect[]>(box?.effects ?? [])
   const [acceptance, setAcceptance] = useState<AcceptancePoint[]>(box?.acceptance ?? [])
   const [forwards, setForwards] = useState<Forward[]>(box?.forwards ?? [])
+  const [fundsGoals, setFundsGoals] = useState(box?.fundsGoals ?? false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   // Reset the form to reflect the target box each time the sheet opens.
@@ -107,6 +108,7 @@ export function BoxEditor({
     setEffects(box?.effects ?? [])
     setAcceptance(box?.acceptance ?? [])
     setForwards(box?.forwards ?? [])
+    setFundsGoals(box?.fundsGoals ?? false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, box])
 
@@ -130,6 +132,7 @@ export function BoxEditor({
       effects,
       acceptance: acceptance.length ? acceptance : undefined,
       forwards: cleanForwards.length ? cleanForwards : undefined,
+      fundsGoals: fundsGoals || undefined,
       icon: box?.icon,
     }
     if (box) updateBox(box.id, data)
@@ -208,6 +211,42 @@ export function BoxEditor({
 
         <Field label="Color">
           <ColorPicker value={color} onChange={setColor} />
+        </Field>
+
+        <Field
+          label="Funds goals"
+          hint="Add this box to the shared pool your goal planner spends — the best goals draw from it first."
+        >
+          <button
+            type="button"
+            role="switch"
+            aria-checked={fundsGoals}
+            onClick={() => setFundsGoals((on) => !on)}
+            className={cn(
+              'flex w-full items-center justify-between gap-3 rounded-xl border px-3.5 py-3 text-left text-sm transition-all duration-200',
+              fundsGoals
+                ? 'border-clay/50 bg-clay/10 text-ink'
+                : 'border-line text-faint hover:border-line-2 hover:text-muted',
+            )}
+          >
+            <span className="flex items-center gap-2">
+              <Target className="size-4" />
+              {fundsGoals ? 'In the goal-funding pool' : 'Not funding goals'}
+            </span>
+            <span
+              className={cn(
+                'relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200',
+                fundsGoals ? 'bg-clay' : 'bg-line-2',
+              )}
+            >
+              <span
+                className={cn(
+                  'absolute top-0.5 size-4 rounded-full bg-surface transition-all duration-200',
+                  fundsGoals ? 'left-[1.125rem]' : 'left-0.5',
+                )}
+              />
+            </span>
+          </button>
         </Field>
 
         <Field

@@ -5,7 +5,6 @@ import { RatingCurve, distanceWeight, type Goal } from '@/domain'
 import { cn } from '@/lib/cn'
 import { fmtDate } from '@/lib/date'
 import { hexToRgba } from '@/lib/palette'
-import { useActiveBoxes } from '@/store/selectors'
 import { useViewDate } from '@/store/time'
 import { useStore } from '@/store/store'
 import { Button, Card, Chip, ConfirmDialog, Menu, MenuItem, Money, Sparkline } from '@/ui'
@@ -34,13 +33,11 @@ export function GoalCard({
 }) {
   const setGoalStatus = useStore((s) => s.setGoalStatus)
   const removeGoal = useStore((s) => s.removeGoal)
-  const boxes = useActiveBoxes()
   const now = useViewDate()
   const [confirm, setConfirm] = useState(false)
 
   const meta = STATUS_META[goal.status]
   const StatusIcon = meta.icon
-  const funding = goal.boxIds.map((id) => boxes.find((b) => b.id === id)).filter((b): b is NonNullable<typeof b> => !!b)
   const ratingLabel = goal.value.type === 'flat' ? `${goal.value.rating}` : 'varies'
   const dimmed = goal.status === 'dismissed'
 
@@ -123,11 +120,6 @@ export function GoalCard({
           <Chip className="gap-1">
             {ratingLabel === 'varies' ? 'rating varies' : `rated ${ratingLabel}/${MAX_RATING}`}
           </Chip>
-          {funding.map((b) => (
-            <Chip key={b.id} dot={b.color}>
-              {b.name}
-            </Chip>
-          ))}
         </div>
       </Card>
 

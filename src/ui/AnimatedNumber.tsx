@@ -6,7 +6,7 @@ import { cn } from '@/lib/cn'
 export function AnimatedNumber({
   value,
   format = (n) => Math.round(n).toString(),
-  duration = 0.9,
+  duration = 0.42,
   className,
 }: {
   value: number

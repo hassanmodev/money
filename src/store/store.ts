@@ -168,11 +168,26 @@ export const useStore = create<Store>()(
     }),
     {
       name: 'cozy-money/v1',
-      version: 2,
+      version: 3,
       // Older saves predate goals — fold in an empty list so the engine is safe.
+      // v3 moved funding from per-goal `boxIds` onto a box `fundsGoals` flag:
+      // any box a goal used to draw from joins the shared pool, and the now-dead
+      // `boxIds` field is stripped off each goal.
       migrate: (persisted, version) => {
         const s = persisted as Partial<FinanceState>
         if (version < 2 && !s.goals) s.goals = []
+        if (version < 3) {
+          const legacyGoals = (s.goals ?? []) as Array<Goal & { boxIds?: string[] }>
+          const funders = new Set(legacyGoals.flatMap((g) => g.boxIds ?? []))
+          s.boxes = (s.boxes ?? []).map((b) =>
+            funders.has(b.id) ? { ...b, fundsGoals: true } : b,
+          )
+          s.goals = legacyGoals.map((g) => {
+            const next = { ...g }
+            delete next.boxIds
+            return next
+          })
+        }
         return s as FinanceState
       },
       // persist only the data, never the action functions

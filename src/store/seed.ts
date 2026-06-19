@@ -68,6 +68,8 @@ export function createSeed(): FinanceState {
         openingDate: '2024-01-01',
         color: '#9eb87f',
         icon: 'PiggyBank',
+        // The rainy-day fund doubles as the pool the goal planner spends from.
+        fundsGoals: true,
         effects: [
           { id: 'fx-sav-int', kind: 'interest', annualRate: 0.036, compounding: 'monthly' },
         ],
@@ -138,8 +140,8 @@ export function createSeed(): FinanceState {
       o('tx-r7', 'expense', 'box-checking', 120, 'fun', '2026-05-16', 'Live show'),
     ],
     goals: [
-      g('goal-japan', 'Two weeks in Japan', 4800, 9, ['box-savings'], '#db8a82', 'The big one.'),
-      g('goal-laptop', 'New laptop', 1900, 6, ['box-savings'], '#8aa0c8'),
+      g('goal-japan', 'Two weeks in Japan', 4800, 9, '#db8a82', 'The big one.'),
+      g('goal-laptop', 'New laptop', 1900, 6, '#8aa0c8'),
       {
         id: 'goal-bike',
         name: 'Road bike',
@@ -153,17 +155,16 @@ export function createSeed(): FinanceState {
             { from: '2027-05-01', rating: 7 },
           ],
         },
-        boxIds: ['box-savings'],
         status: 'open',
         color: '#9eb87f',
         createdAt: CREATED,
       },
       {
-        ...g('goal-desk', 'Standing desk', 520, 5, ['box-checking'], '#74b1a3'),
+        ...g('goal-desk', 'Standing desk', 520, 5, '#74b1a3'),
         status: 'done',
         doneDate: '2026-04-15',
       },
-      { ...g('goal-watch', 'Vintage watch', 3200, 4, [], '#cba24f', 'Maybe one day.'), status: 'dismissed' },
+      { ...g('goal-watch', 'Vintage watch', 3200, 4, '#cba24f', 'Maybe one day.'), status: 'dismissed' },
     ],
   }
 }
@@ -174,7 +175,6 @@ function g(
   name: string,
   cost: number,
   rating: number,
-  boxIds: string[],
   color: string,
   note?: string,
 ): Goal {
@@ -183,7 +183,6 @@ function g(
     name,
     cost,
     value: { type: 'flat', rating },
-    boxIds,
     status: 'open',
     color,
     note,

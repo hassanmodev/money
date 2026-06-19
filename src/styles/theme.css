@@ -136,6 +136,15 @@
     background-clip: content-box;
   }
 
+  @keyframes time-shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0% 0;
+    }
+  }
+
   /* Respect reduced motion */
   @media (prefers-reduced-motion: reduce) {
     *,

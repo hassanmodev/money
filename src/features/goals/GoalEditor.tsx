@@ -4,7 +4,6 @@ import { currencyMeta, type Goal, type GoalStatus, type GoalValue } from '@/doma
 import { cn } from '@/lib/cn'
 import { todayISO } from '@/lib/date'
 import { SWATCHES } from '@/lib/palette'
-import { useActiveBoxes } from '@/store/selectors'
 import { useStore } from '@/store/store'
 import { Button, ConfirmDialog, Field, Input, Segmented, Sheet, Textarea } from '@/ui'
 import { RatingCurveField } from './RatingCurveField'
@@ -43,12 +42,10 @@ export function GoalEditor({
   const removeGoal = useStore((s) => s.removeGoal)
   const baseCurrency = useStore((s) => s.settings.baseCurrency)
   const halfLifeMonths = useStore((s) => s.settings.happinessHalfLifeMonths ?? 24)
-  const boxes = useActiveBoxes()
 
   const [name, setName] = useState('')
   const [costStr, setCostStr] = useState('')
   const [value, setValue] = useState<GoalValue>({ type: 'flat', rating: 5 })
-  const [boxIds, setBoxIds] = useState<string[]>([])
   const [status, setStatus] = useState<GoalStatus>('open')
   const [doneDate, setDoneDate] = useState(todayISO())
   const [color, setColor] = useState(SWATCHES[3].hex)
@@ -60,7 +57,6 @@ export function GoalEditor({
     setName(goal?.name ?? '')
     setCostStr(goal?.cost != null ? String(goal.cost) : '')
     setValue(goal?.value ?? { type: 'flat', rating: 5 })
-    setBoxIds(goal?.boxIds ?? [])
     setStatus(goal?.status ?? 'open')
     setDoneDate(goal?.doneDate ?? todayISO())
     setColor(goal?.color ?? SWATCHES[3].hex)
@@ -69,15 +65,12 @@ export function GoalEditor({
   }, [open, goal])
 
   const symbol = currencyMeta(baseCurrency).symbol
-  const toggleBox = (id: string) =>
-    setBoxIds((ids) => (ids.includes(id) ? ids.filter((b) => b !== id) : [...ids, id]))
 
   const save = () => {
     const data = {
       name: name.trim() || 'Untitled goal',
       cost: parseFloat(costStr) || 0,
       value,
-      boxIds,
       status,
       doneDate: status === 'done' ? doneDate : undefined,
       color,
@@ -135,32 +128,6 @@ export function GoalEditor({
 
         <Field label="Worth" hint="How much happiness it brings — sooner counts more.">
           <RatingCurveField value={value} onChange={setValue} halfLifeMonths={halfLifeMonths} color={color} />
-        </Field>
-
-        <Field label="Funded by" hint="Boxes the spend is drawn from when you achieve it.">
-          {boxes.length === 0 ? (
-            <p className="text-sm text-faint">No boxes yet — add one to fund a goal.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {boxes.map((b) => {
-                const on = boxIds.includes(b.id)
-                return (
-                  <button
-                    key={b.id}
-                    type="button"
-                    onClick={() => toggleBox(b.id)}
-                    className={cn(
-                      'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-all duration-200',
-                      on ? 'border-clay/50 bg-clay/10 text-ink' : 'border-line text-faint hover:border-line-2 hover:text-muted',
-                    )}
-                  >
-                    <span className="size-2 rounded-full" style={{ backgroundColor: b.color }} />
-                    {b.name}
-                  </button>
-                )
-              })}
-            </div>
-          )}
         </Field>
 
         <Field label="Color">

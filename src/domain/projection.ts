@@ -94,19 +94,19 @@ function expand(tx: Transaction, from: ISODate, to: ISODate): Occurrence[] {
 
 /**
  * Turn achieved (`done`) goals into synthetic expenses, so the money they cost
- * actually leaves the projection. The spend is split across the goal's funding
- * boxes (those present in `boxes`); each leg rides through `simulate` as a plain
- * base-currency expense and is converted into the box's currency there. Goals
- * with no present funding box spend nothing — they're advisory markers only.
- * These are computed on the fly, never persisted, never shown in the activity feed.
+ * actually leaves the projection. The spend is split across the goal-funding
+ * pool (the boxes in `boxes` with {@link Box.fundsGoals} set); each leg rides
+ * through `simulate` as a plain base-currency expense and is converted into the
+ * box's currency there. When nothing funds goals the spend lands nowhere — the
+ * goals are advisory markers only. These are computed on the fly, never
+ * persisted, never shown in the activity feed.
  */
 function goalOutflows(goals: Goal[], boxes: Box[], baseCurrency: CurrencyCode): Transaction[] {
-  const present = new Set(boxes.map((b) => b.id))
+  const pool = boxes.filter((b) => b.fundsGoals).map((b) => b.id)
   const out: Transaction[] = []
   for (const g of goals) {
     if (g.status !== 'done' || !g.doneDate) continue
-    const fund = g.boxIds.filter((id) => present.has(id))
-    for (const leg of goalFundingLegs(g, fund)) {
+    for (const leg of goalFundingLegs(g, pool)) {
       out.push({
         id: `goal-${g.id}-${leg.boxId}`,
         kind: 'expense',
@@ -296,25 +296,19 @@ export interface GoalFundingBox {
 }
 
 /**
- * The boxes that fund open goals, each valued on `dateISO` in the base currency.
- * Goals draw their cost from these boxes, so their combined balance *is* the
- * planner's budget — there's no separate number to keep in sync. A box shared by
- * several goals is counted once; boxes already drained by achieved goals reflect
- * their reduced value. Archived boxes are skipped.
+ * The goal-funding pool — every box with {@link Box.fundsGoals} set — each
+ * valued on `dateISO` in the base currency. Goals draw their cost from this
+ * pool, so its combined balance *is* the planner's budget; there's no separate
+ * number to keep in sync. Boxes already drained by achieved goals reflect their
+ * reduced value. Archived boxes are skipped.
  */
 export function goalFundingBoxes(state: FinanceState, dateISO: ISODate): GoalFundingBox[] {
-  const ids = new Set<string>()
-  for (const g of state.goals ?? []) {
-    if (g.status !== 'open') continue
-    for (const id of g.boxIds) ids.add(id)
-  }
-  if (ids.size === 0) return []
   const active = state.boxes.filter((b) => !b.archived)
+  const pool = active.filter((b) => b.fundsGoals)
+  if (pool.length === 0) return []
   const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], active, state.settings.baseCurrency)]
   const series = simulate(active, txns, state.settings, [parseISO(dateISO).getTime()])
-  return active
-    .filter((b) => ids.has(b.id))
-    .map((b) => ({ boxId: b.id, base: toBase(series[b.id][0], b.currency, state.settings) }))
+  return pool.map((b) => ({ boxId: b.id, base: toBase(series[b.id][0], b.currency, state.settings) }))
 }
 
 /** The planner's spendable budget: the summed base value of {@link goalFundingBoxes}. */
@@ -330,16 +324,11 @@ export function goalFundingBudget(state: FinanceState, dateISO: ISODate): number
  * are, since they've really left. Returns zeros when nothing funds open goals.
  */
 export function goalBudgetCurve(state: FinanceState, grid: ISODate[]): number[] {
-  const ids = new Set<string>()
-  for (const g of state.goals ?? []) {
-    if (g.status !== 'open') continue
-    for (const id of g.boxIds) ids.add(id)
-  }
-  if (ids.size === 0 || grid.length === 0) return grid.map(() => 0)
   const active = state.boxes.filter((b) => !b.archived)
+  const funders = active.filter((b) => b.fundsGoals)
+  if (funders.length === 0 || grid.length === 0) return grid.map(() => 0)
   const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], active, state.settings.baseCurrency)]
   const series = simulate(active, txns, state.settings, grid.map((d) => parseISO(d).getTime()))
-  const funders = active.filter((b) => ids.has(b.id))
   return grid.map((_, i) =>
     funders.reduce((sum, b) => sum + toBase(series[b.id][i], b.currency, state.settings), 0),
   )

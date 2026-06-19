@@ -108,6 +108,13 @@ export interface Box {
    * simply keeps whatever its acceptance curve leaves over.
    */
   forwards?: Forward[]
+  /**
+   * Opt this box into the shared goal-funding pool. The planner treats every
+   * box with this set as one pot and spends it on the best goals first; when a
+   * goal is achieved its cost is drawn from these boxes. Absent means the box
+   * keeps to itself and never funds a goal.
+   */
+  fundsGoals?: boolean
   note?: string
   archived?: boolean
   createdAt: ISODateTime
@@ -167,8 +174,9 @@ export type GoalValue =
 
 /**
  * Something worth money that buys happiness. The optimizer spends a limited
- * budget across goals to maximise total happiness; achieving one draws its
- * `cost` from the boxes funding it. Goals are kept for good — done or shelved,
+ * budget — the shared pool of boxes with {@link Box.fundsGoals} set — across
+ * goals to maximise total happiness, best bang-for-buck first; achieving one
+ * draws its `cost` from that pool. Goals are kept for good — done or shelved,
  * never deleted out from under their history.
  */
 export interface Goal {
@@ -176,8 +184,6 @@ export interface Goal {
   name: string
   cost: number // base currency
   value: GoalValue
-  /** boxes that fund it — where the spend is drawn from when achieved */
-  boxIds: string[]
   status: GoalStatus
   /** when it was achieved (status 'done') — drives the deduction + marker */
   doneDate?: ISODate

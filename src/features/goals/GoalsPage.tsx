@@ -65,8 +65,8 @@ export default function GoalsPage() {
     [now, horizon, halfLifeMonths],
   )
 
-  // The budget isn't typed in — it's the live value of the boxes funding your
-  // open goals. Earmark a box on a goal ("Funded by") and it joins the pool.
+  // The budget isn't typed in — it's the live value of the goal-funding pool.
+  // Flip "Funds goals" on a box and it joins the pool the planner spends from.
   const budget = useGoalBudget()
   const funding = useGoalFundingBoxes()
   const boxById = useMemo(() => new Map(boxes.map((b) => [b.id, b])), [boxes])
@@ -162,7 +162,7 @@ export default function GoalsPage() {
             ) : (
               <p className="mt-1 flex items-center gap-1.5 text-xs text-faint">
                 <Wallet className="size-3.5" />
-                No boxes fund your open goals yet — set “Funded by” on a goal to build the budget.
+                No boxes fund goals yet — turn on “Funds goals” for a box to build the budget.
               </p>
             )}
           </div>
@@ -252,7 +252,7 @@ export default function GoalsPage() {
 
         {tracks.length === 0 ? (
           <div className="grid h-[220px] place-items-center text-sm text-faint md:h-[280px]">
-            {chartMode === 'banked' ? 'Nothing achieved yet.' : 'The plan is empty — fund a box on a goal, or add goals.'}
+            {chartMode === 'banked' ? 'Nothing achieved yet.' : 'The plan is empty — mark a box “Funds goals”, or add goals.'}
           </div>
         ) : (
           <HappinessChart tracks={tracks} now={now} horizon={horizon} halfLifeMonths={halfLifeMonths} />

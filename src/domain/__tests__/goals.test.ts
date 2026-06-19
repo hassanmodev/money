@@ -21,7 +21,6 @@ const goal = (g: Partial<Goal>): Goal => ({
   name: 'Goal',
   cost: 100,
   value: { type: 'flat', rating: 5 },
-  boxIds: [],
   status: 'open',
   color: '#9eb87f',
   createdAt: '2026-01-01T00:00:00Z',

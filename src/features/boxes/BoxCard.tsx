@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowRight, ArrowUpRight, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { ArrowDownRight, ArrowRight, ArrowUpRight, MoreHorizontal, Pencil, Target, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toBase, type Box, type Effect } from '@/domain'
 import { cn } from '@/lib/cn'
@@ -118,6 +118,12 @@ export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
         {/* Always reserve the footer row so cards stay the same height whether or
             not they carry effect/forward chips. */}
         <div className="mt-auto flex min-h-[1.625rem] flex-wrap gap-1.5">
+          {box.fundsGoals && (
+            <Chip className="gap-1 text-sage">
+              <Target className="size-3" />
+              Funds goals
+            </Chip>
+          )}
           {box.effects.map((e) => (
             <EffectChip key={e.id} effect={e} />
           ))}

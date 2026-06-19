@@ -339,10 +339,10 @@ export function planGoalsScheduled(goals: Goal[], opts: ScheduleOptions): Schedu
 }
 
 /**
- * A goal's spend, split evenly across the boxes funding it, each leg in that
- * box's own currency-agnostic *base* amount. Used to draw the cost out of the
- * projection on the day a goal is achieved. Goals with no funding box don't
- * touch any balance (they're advisory markers only).
+ * A goal's spend, split evenly across the funding pool (`fundingBoxIds`), each
+ * leg in that box's own currency-agnostic *base* amount. Used to draw the cost
+ * out of the projection on the day a goal is achieved. When the pool is empty
+ * nothing is drawn (goals are advisory markers only).
  */
 export function goalFundingLegs(goal: Goal, fundingBoxIds: string[]): { boxId: string; baseAmount: number }[] {
   if (fundingBoxIds.length === 0) return []

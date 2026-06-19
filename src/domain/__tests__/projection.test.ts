@@ -187,7 +187,6 @@ describe('achieved goals draw down net worth', () => {
     name: 'Trip',
     cost: 300,
     value: { type: 'flat', rating: 7 },
-    boxIds: [],
     status: 'done',
     doneDate: '2026-03-01',
     color: '#9eb87f',
@@ -195,40 +194,48 @@ describe('achieved goals draw down net worth', () => {
     ...g,
   })
 
-  it('subtracts a done goal from its funding box', () => {
-    const sav = box({ id: 'sav', openingBalance: 1000 })
-    const world = state([sav], [], [goal({ boxIds: ['sav'] })])
+  it('subtracts a done goal from the funding pool', () => {
+    const sav = box({ id: 'sav', openingBalance: 1000, fundsGoals: true })
+    const world = state([sav], [], [goal({})])
     expect(netWorthAt(world, '2026-02-01')).toBeCloseTo(1000, 6) // before it's achieved
     expect(netWorthAt(world, '2026-06-01')).toBeCloseTo(700, 6) // 1000 − 300
     expect(boxValueAt(world, 'sav', '2026-06-01')).toBeCloseTo(700, 6)
   })
 
-  it('splits the spend across several funding boxes', () => {
-    const a = box({ id: 'a', openingBalance: 500 })
-    const b = box({ id: 'b', openingBalance: 500 })
-    const world = state([a, b], [], [goal({ cost: 400, boxIds: ['a', 'b'] })])
+  it('splits the spend evenly across the pool boxes', () => {
+    const a = box({ id: 'a', openingBalance: 500, fundsGoals: true })
+    const b = box({ id: 'b', openingBalance: 500, fundsGoals: true })
+    const world = state([a, b], [], [goal({ cost: 400 })])
     expect(boxValueAt(world, 'a', '2026-06-01')).toBeCloseTo(300, 6) // 500 − 200
     expect(boxValueAt(world, 'b', '2026-06-01')).toBeCloseTo(300, 6)
   })
 
-  it('a goal with no funding box is advisory only — nothing is drawn', () => {
+  it('draws nothing when no box funds goals — goals are advisory only', () => {
     const sav = box({ id: 'sav', openingBalance: 1000 })
-    const world = state([sav], [], [goal({ boxIds: [] })])
+    const world = state([sav], [], [goal({})])
     expect(netWorthAt(world, '2026-06-01')).toBeCloseTo(1000, 6)
   })
 
+  it('only pool boxes are drawn down, not bystanders', () => {
+    const sav = box({ id: 'sav', openingBalance: 1000, fundsGoals: true })
+    const other = box({ id: 'other', openingBalance: 500 })
+    const world = state([sav, other], [], [goal({})])
+    expect(boxValueAt(world, 'sav', '2026-06-01')).toBeCloseTo(700, 6) // 1000 − 300
+    expect(boxValueAt(world, 'other', '2026-06-01')).toBeCloseTo(500, 6) // untouched
+  })
+
   it('open and shelved goals never touch the projection', () => {
-    const sav = box({ id: 'sav', openingBalance: 1000 })
+    const sav = box({ id: 'sav', openingBalance: 1000, fundsGoals: true })
     const world = state([sav], [], [
-      goal({ id: 'g1', status: 'open', boxIds: ['sav'] }),
-      goal({ id: 'g2', status: 'dismissed', boxIds: ['sav'] }),
+      goal({ id: 'g1', status: 'open' }),
+      goal({ id: 'g2', status: 'dismissed' }),
     ])
     expect(netWorthAt(world, '2026-06-01')).toBeCloseTo(1000, 6)
   })
 
   it('surfaces achieved goals as markers within the horizon', () => {
-    const sav = box({ id: 'sav', openingBalance: 1000 })
-    const world = state([sav], [], [goal({ boxIds: ['sav'] })])
+    const sav = box({ id: 'sav', openingBalance: 1000, fundsGoals: true })
+    const world = state([sav], [], [goal({})])
     const r = project(world, { from: '2026-01-01', to: '2026-12-31' })
     expect(r.markers).toHaveLength(1)
     expect(r.markers[0]).toMatchObject({ id: 'goal', date: '2026-03-01', cost: 300 })

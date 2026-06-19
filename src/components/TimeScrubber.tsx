@@ -9,7 +9,7 @@
  * that date; the pill names where (and when) you are.
  */
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { History, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { addDaysISO, daysBetween, fmtDate, todayISO } from '@/lib/date'
@@ -151,12 +151,19 @@ export function TimeScrubber() {
   }
 
   const pillLeft = clamp01(p) * 100
-  const pillShift = `${clamp01(p) <= 0.12 ? 0 : clamp01(p) >= 0.88 ? -100 : -50}%`
+
+  // The big date that lives *behind* the slider. A shimmer band sweeps across
+  // it (brightest in the middle), so the letters catch the light like starlight.
+  const bigDate = traveling ? fmtDate(view) : fmtDate(today)
+  const [g1, g2, hi] = traveling
+    ? [accent, accent2, '#fbe9d4']
+    : ['var(--color-faint)', 'var(--color-muted)', 'var(--color-ink)']
+  const dateGradient = `linear-gradient(105deg, ${g1} 0%, ${g1} 32%, ${hi} 50%, ${g2} 68%, ${g2} 100%)`
 
   return (
     <div
       className={cn(
-        'border-b bg-canvas/70 backdrop-blur-md transition-colors duration-500',
+        'relative border-b bg-canvas/90 backdrop-blur-md transition-colors duration-500',
         traveling ? 'border-transparent' : 'border-line',
       )}
       style={
@@ -165,7 +172,43 @@ export function TimeScrubber() {
           : undefined
       }
     >
-      <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-2.5 md:gap-5 md:px-10">
+      {/* ── the stellar date, rendered large behind everything ──────────────
+          A soft radial bloom + a shimmer that sweeps the gradient across the
+          letters, so it glows and breathes instead of sitting flat. */}
+      <div className="pointer-events-none absolute inset-x-5 inset-y-0 grid place-items-center pb-20 md:inset-x-10">
+        <motion.div
+          aria-hidden
+          className="absolute h-40 w-[min(90%,42rem)] overflow-hidden rounded-full"
+          animate={{ opacity: traveling ? 0.65 : 0.45 }}
+          transition={{ duration: 0.6 }}
+          style={{
+            background: `radial-gradient(60% 70% at 50% 50%, ${traveling ? accent : 'var(--color-faint)'}33, transparent 72%)`,
+            filter: 'blur(14px)',
+          }}
+        />
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.div
+            key={bigDate}
+            initial={{ opacity: 0, y: 12, filter: 'blur(8px)' }}
+            animate={{ opacity: traveling ? 0.42 : 0.28, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: -12, filter: 'blur(8px)', position: 'absolute' }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            className="inline-block max-w-full select-none whitespace-nowrap pr-[0.15em] font-serif font-light italic leading-none tracking-[-0.02em] text-[clamp(3rem,7vw,5.25rem)]"
+            style={{
+              backgroundImage: dateGradient,
+              backgroundSize: '260% 100%',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              color: 'transparent',
+              animation: 'time-shimmer 5.5s linear infinite',
+            }}
+          >
+            {bigDate}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      <div className="relative mx-auto flex min-h-[7.25rem] max-w-5xl items-end gap-3 px-5 pb-2 pt-4 md:gap-5 md:px-10">
         {/* leading glyph — a quiet "you are here in time" cue */}
         <div
           className="hidden size-9 shrink-0 place-items-center rounded-xl border transition-colors duration-500 sm:grid"
@@ -278,9 +321,10 @@ export function TimeScrubber() {
             />
           </motion.div>
 
-          {/* floating date pill, riding above the needle */}
+          {/* minimal caption riding above the needle — just the *distance*,
+              since the full date now lives large in the background */}
           <motion.div
-            className="pointer-events-none absolute top-0"
+            className="pointer-events-none absolute top-1 -translate-x-1/2"
             style={{ left: `${pillLeft}%` }}
             animate={{ left: `${pillLeft}%` }}
             transition={
@@ -288,21 +332,10 @@ export function TimeScrubber() {
             }
           >
             <div
-              className="rounded-lg border bg-raised/90 px-2.5 py-1 shadow-soft backdrop-blur-sm transition-colors duration-300"
-              style={{
-                transform: `translateX(${pillShift})`,
-                borderColor: traveling ? `${accent}55` : 'var(--color-line)',
-              }}
+              className="whitespace-nowrap text-[11px] font-medium uppercase tracking-[0.14em] transition-colors duration-300"
+              style={{ color: traveling ? accent : 'var(--color-faint)' }}
             >
-              <div
-                className="whitespace-nowrap font-serif text-[13px] leading-tight"
-                style={{ color: traveling ? accent : 'var(--color-ink)' }}
-              >
-                {traveling ? fmtDate(view) : 'Today'}
-              </div>
-              <div className="whitespace-nowrap text-[10px] leading-tight text-faint">
-                {traveling ? offsetLabel(offsetDays) : fmtDate(today)}
-              </div>
+              {offsetLabel(offsetDays)}
             </div>
           </motion.div>
         </div>
