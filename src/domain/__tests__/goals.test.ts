@@ -161,6 +161,35 @@ describe('umbrella goals (the happiness multiplier)', () => {
     const lift = 0.5 * (goalHappiness(r1, NOW, base) + goalHappiness(r2, NOW, base))
     expect(withUmbrella.happiness).toBeCloseTo(without.happiness + lift, 6)
   })
+
+  it('a zero-boost umbrella plans identically to the same goal as ordinary', () => {
+    // The umbrella flag must never buy scheduling priority on its own: a zero-
+    // boost umbrella adds no lift, so it must produce the exact same plan as the
+    // same goal without the flag. Regression for an umbrella-first sort that, on
+    // a fine grid + bounded beam, let an expensive umbrella grab the budget and
+    // strand cheaper, denser goals (worst at zero boost — pure harm, no gain).
+    const months = Array.from({ length: 49 }, (_, i) => {
+      const d = new Date(Date.UTC(2026, i, 1))
+      return d.toISOString().slice(0, 10)
+    })
+    const budgetCurve = months.map((_, i) => 200 + i * 20) // grows 200 → 1160
+    const opts = { now: NOW, horizon: HORIZON, halfLifeMonths: 24, grid: months, budgetCurve }
+    const cheap = () => [
+      goal({ id: 'a', cost: 120, value: { type: 'flat', rating: 9 } }),
+      goal({ id: 'b', cost: 120, value: { type: 'flat', rating: 8 } }),
+      goal({ id: 'c', cost: 120, value: { type: 'flat', rating: 7 } }),
+    ]
+    const big = { id: 'big', cost: 700, value: { type: 'flat' as const, rating: 5 } }
+
+    const asUmbrella = planGoalsScheduled([...cheap(), goal({ ...big, umbrella: { boost: 0 } })], opts as ScheduleOptions)
+    const asOrdinary = planGoalsScheduled([...cheap(), goal({ ...big })], opts as ScheduleOptions)
+
+    const ids = (p: typeof asUmbrella) => p.scheduled.map((s) => `${s.goal.id}@${s.achieveDate}`).sort()
+    expect(ids(asUmbrella)).toEqual(ids(asOrdinary))
+    expect(asUmbrella.happiness).toBeCloseTo(asOrdinary.happiness, 6)
+    // and the cheapest densest goals genuinely make the plan (not starved out)
+    expect(asUmbrella.scheduled.map((s) => s.goal.id)).toEqual(expect.arrayContaining(['a', 'b']))
+  })
 })
 
 describe('planGoals (greedy knapsack)', () => {

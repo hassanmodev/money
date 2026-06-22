@@ -430,7 +430,7 @@ export function planGoalsScheduled(goals: Goal[], opts: ScheduleOptions): Schedu
     hapTo(curve, fromY, horizonY, sources, exclude)
 
   // Precompute each goal's curve; price it against the already-active umbrellas
-  // to fix the order we *consider* it in (umbrellas first — see the sort).
+  // to fix the order we *consider* it in (best bang-for-buck first — see the sort).
   const scored = open.map((goal) => {
     const cost = Math.max(0, goal.cost)
     const curve = new RatingCurve(goal.value, opts.now)
@@ -438,15 +438,14 @@ export function planGoalsScheduled(goals: Goal[], opts: ScheduleOptions): Schedu
     const density = cost <= 0 ? Infinity : baseHappiness / cost
     return { goal, cost, curve, baseHappiness, density, isUmbrella: !!goal.umbrella }
   })
-  // Consider umbrellas before ordinary goals, so by the time we price a regular
-  // goal the multiplier acting on it is already fixed in the state. Within each
-  // group: best bang-for-buck first, ties broken by raw happiness.
-  scored.sort(
-    (a, b) =>
-      Number(b.isUmbrella) - Number(a.isUmbrella) ||
-      b.density - a.density ||
-      b.baseHappiness - a.baseHappiness,
-  )
+  // Consider goals best bang-for-buck first, ties broken by raw happiness. The
+  // umbrella flag does NOT buy a goal scheduling priority — it only earns its
+  // keep through the lift it gives others, which the final re-pricing against
+  // the chosen umbrella field credits regardless of consideration order. (An
+  // earlier rule sorted umbrellas first; an expensive low-value umbrella then
+  // grabbed the budget ahead of cheaper, denser goals and starved them — worst
+  // of all at zero boost, where it adds nothing yet still jumped the queue.)
+  scored.sort((a, b) => b.density - a.density || b.baseHappiness - a.baseHappiness)
 
   // The pot at grid step `t`, after a set of dated spends, each spend losing the
   // growth it would have earned between its step and `t`.
