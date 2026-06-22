@@ -15,12 +15,22 @@
  * `src/domain`; the behavioural classes hydrate from records and are discarded.
  */
 import { parseISO } from 'date-fns'
-import type { Goal, GoalValue, ISODate } from './types'
+import type { Goal, GoalGroup, GoalValue, ISODate } from './types'
 
 const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000
 const LN2 = Math.LN2
 /** Below this λ the discount is effectively flat — integrate linearly instead. */
 const FLAT = 1e-9
+
+/** Fraction of the older item's value forfeited when upgrading, unless a group overrides it. */
+export const DEFAULT_UPGRADE_LOSS = 0.15
+
+/**
+ * The top of the rating scale — a maxed goal rates this. Used to turn an
+ * umbrella's own rating into the fraction of its boost that actually lands.
+ * Mirrors the UI's `MAX_RATING`; kept here so the domain stays import-free.
+ */
+export const RATING_MAX = 10
 
 /** How the goal planner reads "now", "how far to look", and "how steep". */
 export interface HappinessOptions {
@@ -84,6 +94,11 @@ export class RatingCurve {
     }))
   }
 
+  /** Years-from-now where the rating steps — the finite segment starts. */
+  breakpoints(): number[] {
+    return this.segments.map((s) => s.from).filter((f) => Number.isFinite(f))
+  }
+
   /** Undiscounted rating at `years` from now (the raw curve the user drew). */
   rateAt(years: number): number {
     let r = this.segments[0].rating
@@ -116,20 +131,125 @@ export class RatingCurve {
   }
 }
 
-/** The discounted happiness a goal banks if achieved on `achieveDate`. */
-export function goalHappiness(goal: Goal, achieveDate: ISODate, opts: HappinessOptions): number {
-  const curve = new RatingCurve(goal.value, opts.now)
-  const t0 = parseISO(opts.now).getTime()
-  const fromY = (parseISO(achieveDate).getTime() - t0) / MS_PER_YEAR
-  const toY = (parseISO(opts.horizon).getTime() - t0) / MS_PER_YEAR
-  return curve.area(Math.max(0, fromY), toY, opts.halfLifeMonths)
+/** An achieved umbrella goal, feeding the time-varying happiness multiplier. */
+export interface UmbrellaSource {
+  /** the umbrella's own rating over time (years-from-now) */
+  curve: RatingCurve
+  /** the bump at full rating — 0.15 lifts everything by 15% when maxed */
+  boost: number
+  /** years-from-now the umbrella switches on (≥ 0) */
+  fromYear: number
+  /** the umbrella goal's id, so a goal is never boosted by itself */
+  goalId: string
 }
 
-/** Total happiness already banked from achieved (`done`) goals. */
+/**
+ * The happiness multiplier `years` from now. Every umbrella switched on by then
+ * lifts the total by `boost × (rating(years) / RATING_MAX)`, stacking
+ * multiplicatively — a zero-rated umbrella contributes ×1, a maxed one ×(1+boost).
+ * `exclude` skips a goal so it never amplifies itself.
+ */
+export function umbrellaMultiplierAt(sources: UmbrellaSource[], years: number, exclude?: string): number {
+  let m = 1
+  for (const s of sources) {
+    if (s.goalId === exclude || years + 1e-9 < s.fromYear) continue
+    const frac = Math.max(0, Math.min(1, s.curve.rateAt(years) / RATING_MAX))
+    m *= 1 + s.boost * frac
+  }
+  return m
+}
+
+/** Closed-form ∫ e^(−λy) dy over [a,b] — the bare distance discount. */
+function discountIntegral(a: number, b: number, lambda: number): number {
+  if (b <= a) return 0
+  return lambda < FLAT ? b - a : (Math.exp(-lambda * a) - Math.exp(-lambda * b)) / lambda
+}
+
+/**
+ * Discounted happiness of a rating curve over [`fromY`,`toY`], lifted by the
+ * umbrella multiplier. Both the rating and the multiplier are piecewise-constant,
+ * so we cut the span at every breakpoint of either and integrate the discount
+ * closed-form on each piece — still exact, never sampled.
+ */
+function multipliedArea(
+  curve: RatingCurve,
+  fromY: number,
+  toY: number,
+  halfLifeMonths = 24,
+  sources: UmbrellaSource[] = [],
+  exclude?: string,
+): number {
+  if (toY <= fromY) return 0
+  const lambda = lambdaOf(halfLifeMonths)
+  const cuts = new Set<number>([fromY, toY])
+  const add = (x: number) => {
+    if (x > fromY && x < toY) cuts.add(x)
+  }
+  for (const bp of curve.breakpoints()) add(bp)
+  for (const s of sources) {
+    if (s.goalId === exclude) continue
+    add(s.fromYear)
+    for (const bp of s.curve.breakpoints()) add(bp)
+  }
+  const xs = [...cuts].sort((a, b) => a - b)
+  let total = 0
+  for (let i = 0; i + 1 < xs.length; i++) {
+    const a = xs[i]
+    const b = xs[i + 1]
+    const mid = (a + b) / 2
+    const r = curve.rateAt(mid)
+    if (r === 0) continue
+    total += r * umbrellaMultiplierAt(sources, mid, exclude) * discountIntegral(a, b, lambda)
+  }
+  return total
+}
+
+/**
+ * The discounted happiness a goal banks if achieved on `achieveDate`. Pass the
+ * active `umbrellas` to fold in their time-varying lift (a goal never boosts
+ * itself); omit them for the bare, unamplified worth.
+ */
+export function goalHappiness(
+  goal: Goal,
+  achieveDate: ISODate,
+  opts: HappinessOptions,
+  umbrellas?: UmbrellaSource[],
+): number {
+  const curve = new RatingCurve(goal.value, opts.now)
+  const t0 = parseISO(opts.now).getTime()
+  const fromY = Math.max(0, (parseISO(achieveDate).getTime() - t0) / MS_PER_YEAR)
+  const toY = (parseISO(opts.horizon).getTime() - t0) / MS_PER_YEAR
+  if (!umbrellas || umbrellas.length === 0) return curve.area(fromY, toY, opts.halfLifeMonths)
+  return multipliedArea(curve, fromY, toY, opts.halfLifeMonths, umbrellas, goal.id)
+}
+
+/**
+ * Build the umbrella multiplier from a set of goals, each switched on at the
+ * date `achieveDateOf` returns — skipping non-umbrellas and any whose date is
+ * null (e.g. an unscheduled umbrella). Pure: curves are built once here.
+ */
+export function umbrellaSources(
+  goals: Goal[],
+  opts: HappinessOptions,
+  achieveDateOf: (g: Goal) => ISODate | null | undefined,
+): UmbrellaSource[] {
+  const t0 = parseISO(opts.now).getTime()
+  const sources: UmbrellaSource[] = []
+  for (const g of goals) {
+    if (!g.umbrella) continue
+    const date = achieveDateOf(g)
+    if (!date) continue
+    const fromYear = Math.max(0, (parseISO(date).getTime() - t0) / MS_PER_YEAR)
+    sources.push({ curve: new RatingCurve(g.value, opts.now), boost: g.umbrella.boost, fromYear, goalId: g.id })
+  }
+  return sources
+}
+
+/** Total happiness already banked from achieved (`done`) goals, umbrellas included. */
 export function bankedHappiness(goals: Goal[], opts: HappinessOptions): number {
-  return goals
-    .filter((g) => g.status === 'done' && g.doneDate)
-    .reduce((sum, g) => sum + goalHappiness(g, g.doneDate!, opts), 0)
+  const done = goals.filter((g) => g.status === 'done' && g.doneDate)
+  const umbrellas = umbrellaSources(done, opts, (g) => g.doneDate)
+  return done.reduce((sum, g) => sum + goalHappiness(g, g.doneDate!, opts, umbrellas), 0)
 }
 
 /** One goal weighed up by the optimizer: its happiness, cost, and bang-for-buck. */
@@ -158,6 +278,11 @@ export interface GoalPlan {
  * The optimal greedy plan: among the open goals, take the best happiness-per-
  * cost first and keep going while the budget lasts. Free goals (cost ≤ 0) lead;
  * anything pricier than the whole budget can never be chosen.
+ *
+ * Goals sharing a `groupId` are alternatives: once one is chosen its siblings
+ * are skipped. This static knapsack never sequences an upgrade — that's the
+ * time-aware {@link planGoalsScheduled}'s job; here a group simply yields its
+ * single best-value member.
  */
 export function planGoals(goals: Goal[], budget: number, opts: HappinessOptions): GoalPlan {
   const scores: GoalScore[] = goals
@@ -173,13 +298,17 @@ export function planGoals(goals: Goal[], budget: number, opts: HappinessOptions)
 
   const chosen: GoalScore[] = []
   const skipped: GoalScore[] = []
+  const claimedGroups = new Set<string>()
   let spend = 0
   let happiness = 0
   for (const s of scores) {
-    if (spend + s.cost <= budget && s.happiness > 0) {
+    const group = s.goal.groupId
+    const excluded = group != null && claimedGroups.has(group)
+    if (!excluded && spend + s.cost <= budget && s.happiness > 0) {
       chosen.push(s)
       spend += s.cost
       happiness += s.happiness
+      if (group != null) claimedGroups.add(group)
     } else {
       skipped.push(s)
     }
@@ -190,6 +319,11 @@ export function planGoals(goals: Goal[], budget: number, opts: HappinessOptions)
 /** One goal placed on the timeline by {@link planGoalsScheduled}. */
 export interface ScheduledGoal {
   goal: Goal
+  /**
+   * Money this leg commits. For a plain goal it's `goal.cost`; for the costlier
+   * half of an upgrade it's the incremental switch cost (new minus the older
+   * item's resale value), so the schedule's total `spend` adds up correctly.
+   */
   cost: number
   /** the date this plan achieves the goal on (a grid date ≥ now) */
   achieveDate: ISODate
@@ -197,6 +331,12 @@ export interface ScheduledGoal {
   happiness: number
   /** the priority heuristic: happiness-if-achieved-now per unit cost */
   density: number
+  /** the alternative-set this goal belongs to, if any */
+  groupId?: string
+  /** when a cheaper member is replaced by an upgrade — its worth is counted only to here */
+  until?: ISODate
+  /** for the costlier half of an upgrade: the id of the cheaper goal it replaces */
+  upgradeFrom?: string
 }
 
 /** A goal the schedule leaves out, with why. */
@@ -206,8 +346,11 @@ export interface DroppedGoal {
   /** happiness it would bank if achieved now — for ranking the leftovers */
   happiness: number
   density: number
-  /** `unaffordable`: the pot never covers it. `not-worth-it`: zero happiness. */
-  reason: 'unaffordable' | 'not-worth-it'
+  /**
+   * `unaffordable`: the pot never covers it. `not-worth-it`: zero happiness.
+   * `alternative`: a sibling in its group was chosen instead.
+   */
+  reason: 'unaffordable' | 'not-worth-it' | 'alternative'
 }
 
 export interface ScheduledPlan {
@@ -228,6 +371,8 @@ export interface ScheduleOptions extends HappinessOptions {
   budgetCurve: number[]
   /** how many partial schedules to carry through the beam search (default 16) */
   beamWidth?: number
+  /** alternative-sets the goals reference by `groupId` — drives exclusion & upgrades */
+  groups?: GoalGroup[]
 }
 
 /** A balance this small counts as an empty pot — avoids dividing by ~0 growth. */
@@ -256,18 +401,52 @@ export function planGoalsScheduled(goals: Goal[], opts: ScheduleOptions): Schedu
     return { scheduled: [], dropped: [], happiness: 0, spend: 0 }
   }
 
-  // Score each goal as the static planner does — happiness if achieved now, and
-  // bang-for-buck — to fix the order we *consider* them in. Precompute the
-  // discounted happiness of achieving each goal on each grid date once, so the
-  // search is pure arithmetic from here on.
+  const t0 = parseISO(opts.now).getTime()
+  const yearOf = (d: ISODate) => Math.max(0, (parseISO(d).getTime() - t0) / MS_PER_YEAR)
+  const horizonY = (parseISO(opts.horizon).getTime() - t0) / MS_PER_YEAR
+  const gridY = grid.map(yearOf)
+  const half = opts.halfLifeMonths
+  const groupMap = new Map((opts.groups ?? []).map((gr) => [gr.id, gr]))
+  const lossOf = (groupId: string | undefined) => {
+    const gr = groupId != null ? groupMap.get(groupId) : undefined
+    return gr?.upgradeLoss ?? DEFAULT_UPGRADE_LOSS
+  }
+
+  // Umbrellas already achieved lift the whole plan from the off — their spend is
+  // banked, but they amplify everything we schedule under them.
+  const doneUmbrellas = umbrellaSources(
+    goals.filter((g) => g.status === 'done' && g.doneDate),
+    opts,
+    (g) => g.doneDate,
+  )
+
+  // One goal's discounted happiness banked over [`fromY`,`toY`], under `sources`.
+  const hapTo = (curve: RatingCurve, fromY: number, toY: number, sources: UmbrellaSource[], exclude: string) =>
+    sources.length === 0
+      ? curve.area(fromY, toY, half)
+      : multipliedArea(curve, fromY, toY, half, sources, exclude)
+  // ...the common case: held all the way to the horizon.
+  const hap = (curve: RatingCurve, fromY: number, sources: UmbrellaSource[], exclude: string) =>
+    hapTo(curve, fromY, horizonY, sources, exclude)
+
+  // Precompute each goal's curve; price it against the already-active umbrellas
+  // to fix the order we *consider* it in (umbrellas first — see the sort).
   const scored = open.map((goal) => {
     const cost = Math.max(0, goal.cost)
-    const hGrid = grid.map((d) => goalHappiness(goal, d, opts))
-    const nowHappiness = hGrid[0]
-    const density = cost <= 0 ? Infinity : nowHappiness / cost
-    return { goal, cost, hGrid, nowHappiness, density }
+    const curve = new RatingCurve(goal.value, opts.now)
+    const baseHappiness = hap(curve, gridY[0], doneUmbrellas, goal.id)
+    const density = cost <= 0 ? Infinity : baseHappiness / cost
+    return { goal, cost, curve, baseHappiness, density, isUmbrella: !!goal.umbrella }
   })
-  scored.sort((a, b) => b.density - a.density || b.nowHappiness - a.nowHappiness)
+  // Consider umbrellas before ordinary goals, so by the time we price a regular
+  // goal the multiplier acting on it is already fixed in the state. Within each
+  // group: best bang-for-buck first, ties broken by raw happiness.
+  scored.sort(
+    (a, b) =>
+      Number(b.isUmbrella) - Number(a.isUmbrella) ||
+      b.density - a.density ||
+      b.baseHappiness - a.baseHappiness,
+  )
 
   // The pot at grid step `t`, after a set of dated spends, each spend losing the
   // growth it would have earned between its step and `t`.
@@ -291,51 +470,146 @@ export function planGoalsScheduled(goals: Goal[], opts: ScheduleOptions): Schedu
   }
 
   // Beam search. A state is a decision per considered goal: a grid index, or -1
-  // to drop. We extend one goal at a time and keep the `beamWidth` happiest.
-  type State = { decisions: number[]; commits: Commit[]; happiness: number }
-  let beam: State[] = [{ decisions: [], commits: [], happiness: 0 }]
+  // to drop, plus the umbrellas switched on so far (so ordinary goals after them
+  // are priced with the lift). We extend one goal at a time, keeping the happiest.
+  type State = { decisions: number[]; commits: Commit[]; sources: UmbrellaSource[]; happiness: number }
+  let beam: State[] = [{ decisions: [], commits: [], sources: doneUmbrellas, happiness: 0 }]
 
   for (let i = 0; i < scored.length; i++) {
     const g = scored[i]
+    const group = groupMap.get(g.goal.groupId ?? '')
     const children: State[] = []
     for (const st of beam) {
       // always an option to drop this goal
-      children.push({ decisions: [...st.decisions, -1], commits: st.commits, happiness: st.happiness })
-      // ...or achieve it on any date that keeps the schedule feasible
-      for (let d = 0; d < grid.length; d++) {
-        const h = g.hGrid[d]
-        if (h <= 0) continue
-        const commits = g.cost > 0 ? [...st.commits, { grid: d, cost: g.cost }] : st.commits
-        if (g.cost > 0 && !feasible(commits)) continue
-        children.push({ decisions: [...st.decisions, d], commits, happiness: st.happiness + h })
+      children.push({ decisions: [...st.decisions, -1], commits: st.commits, sources: st.sources, happiness: st.happiness })
+
+      // Scheduled siblings from the same alternative-set. A sequence is capped at
+      // two (cheap→premium), so 0 means the slot is free, 1 means the only way to
+      // also take `g` is an upgrade, and 2 means the pair is full — `g` must drop.
+      const sibs: { index: number; grid: number; scored: typeof scored[number] }[] = []
+      if (g.goal.groupId != null) {
+        for (let j = 0; j < i; j++) {
+          if (scored[j].goal.groupId === g.goal.groupId && st.decisions[j] >= 0) {
+            sibs.push({ index: j, grid: st.decisions[j], scored: scored[j] })
+          }
+        }
+      }
+      const sib = sibs.length === 1 ? sibs[0] : undefined
+
+      if (sibs.length > 0) {
+        // A sibling already holds this slot. The only way to also take `g` is an
+        // *upgrade* of a lone cheaper sibling: buy `g` strictly later, replacing it
+        // and paying the switch cost. Otherwise `g` just drops (handled above). A
+        // different sibling winning the slot is covered by the drop-this-one branch.
+        if (sib && group?.upgradable && g.cost > sib.scored.cost) {
+          const loss = lossOf(g.goal.groupId)
+          const incremental = g.cost - sib.scored.cost * (1 - loss)
+          for (let d = sib.grid + 1; d < grid.length; d++) {
+            const hG = hap(g.curve, gridY[d], st.sources, g.goal.id)
+            if (hG <= 0) continue
+            const commits = incremental > 0 ? [...st.commits, { grid: d, cost: incremental }] : st.commits
+            if (incremental > 0 && !feasible(commits)) continue
+            // The cheaper sibling now only earns happiness up to the swap date.
+            const cheaperFull = hap(sib.scored.curve, gridY[sib.grid], st.sources, sib.scored.goal.id)
+            const cheaperCut = hapTo(sib.scored.curve, gridY[sib.grid], gridY[d], st.sources, sib.scored.goal.id)
+            const sources = g.isUmbrella
+              ? [...st.sources, { curve: g.curve, boost: g.goal.umbrella!.boost, fromYear: gridY[d], goalId: g.goal.id }]
+              : st.sources
+            children.push({
+              decisions: [...st.decisions, d],
+              commits,
+              sources,
+              happiness: st.happiness - cheaperFull + cheaperCut + hG,
+            })
+          }
+        }
+      } else {
+        // ...no sibling holds the slot — achieve `g` on any date that stays feasible.
+        for (let d = 0; d < grid.length; d++) {
+          const h = hap(g.curve, gridY[d], st.sources, g.goal.id)
+          if (h <= 0) continue
+          const commits = g.cost > 0 ? [...st.commits, { grid: d, cost: g.cost }] : st.commits
+          if (g.cost > 0 && !feasible(commits)) continue
+          const sources = g.isUmbrella
+            ? [...st.sources, { curve: g.curve, boost: g.goal.umbrella!.boost, fromYear: gridY[d], goalId: g.goal.id }]
+            : st.sources
+          children.push({ decisions: [...st.decisions, d], commits, sources, happiness: st.happiness + h })
+        }
       }
     }
     children.sort((a, b) => b.happiness - a.happiness)
     beam = children.slice(0, beamWidth)
   }
 
-  const best = beam[0] ?? { decisions: scored.map(() => -1), commits: [], happiness: 0 }
+  const best = beam[0] ?? { decisions: scored.map(() => -1), commits: [], sources: doneUmbrellas, happiness: 0 }
+
+  // Recognise upgrade pairs: a group that placed two members runs the cheaper
+  // one first, then upgrades to the costlier later. The earlier member is
+  // superseded at the swap date; the later one is the upgrade target.
+  const scheduledByGroup = new Map<string, number[]>()
+  scored.forEach((s, i) => {
+    const gid = s.goal.groupId
+    if (gid != null && (best.decisions[i] ?? -1) >= 0) {
+      const arr = scheduledByGroup.get(gid) ?? []
+      arr.push(i)
+      scheduledByGroup.set(gid, arr)
+    }
+  })
+  const supersededAt = new Map<number, number>() // scored index → grid index of the swap
+  const upgradeFromId = new Map<number, string>() // scored index → cheaper goal id
+  for (const arr of scheduledByGroup.values()) {
+    arr.sort((a, b) => best.decisions[a] - best.decisions[b])
+    if (arr.length >= 2) {
+      const cheaper = arr[0]
+      const target = arr[arr.length - 1]
+      supersededAt.set(cheaper, best.decisions[target])
+      upgradeFromId.set(target, scored[cheaper].goal.id)
+    }
+  }
+
+  // Report each placed goal against the *final* multiplier field, so the rows
+  // and total agree — a goal scheduled early still shows the lift of an umbrella
+  // the plan adds after it.
   const scheduled: ScheduledGoal[] = []
   const dropped: DroppedGoal[] = []
   scored.forEach((s, i) => {
     const d = best.decisions[i] ?? -1
     if (d >= 0) {
+      const cutIdx = supersededAt.get(i)
+      const toY = cutIdx != null ? gridY[cutIdx] : horizonY
+      const from = upgradeFromId.get(i)
+      // The upgrade target commits only the incremental switch cost — the new
+      // item's price net of the older one's resale value.
+      let cost = s.cost
+      if (from != null) {
+        const cheaper = scored.find((x) => x.goal.id === from)!
+        cost = s.cost - cheaper.cost * (1 - lossOf(s.goal.groupId))
+      }
       scheduled.push({
         goal: s.goal,
-        cost: s.cost,
+        cost,
         achieveDate: grid[d],
-        happiness: s.hGrid[d],
+        happiness: hapTo(s.curve, gridY[d], toY, best.sources, s.goal.id),
         density: s.density,
+        groupId: s.goal.groupId,
+        until: cutIdx != null ? grid[cutIdx] : undefined,
+        upgradeFrom: from,
       })
     } else {
-      // worth nothing vs. simply couldn't be fitted within the budget over time
-      const reason: DroppedGoal['reason'] = s.nowHappiness <= 0 ? 'not-worth-it' : 'unaffordable'
-      dropped.push({ goal: s.goal, cost: s.cost, happiness: s.nowHappiness, density: s.density, reason })
+      // A losing alternative vs. worth nothing vs. couldn't be fitted in budget.
+      const reason: DroppedGoal['reason'] =
+        s.goal.groupId != null && scheduledByGroup.has(s.goal.groupId)
+          ? 'alternative'
+          : s.baseHappiness <= 0
+            ? 'not-worth-it'
+            : 'unaffordable'
+      dropped.push({ goal: s.goal, cost: s.cost, happiness: s.baseHappiness, density: s.density, reason })
     }
   })
   scheduled.sort((a, b) => a.achieveDate.localeCompare(b.achieveDate) || b.density - a.density)
+  const happiness = scheduled.reduce((sum, s) => sum + s.happiness, 0)
   const spend = scheduled.reduce((sum, s) => sum + s.cost, 0)
-  return { scheduled, dropped, happiness: best.happiness, spend }
+  return { scheduled, dropped, happiness, spend }
 }
 
 /**

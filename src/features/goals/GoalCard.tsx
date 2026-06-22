@@ -1,7 +1,7 @@
-import { MoreHorizontal, Pencil, RotateCcw, Sparkles, Trash2 } from 'lucide-react'
+import { MoreHorizontal, Pencil, RotateCcw, Sparkles, Trash2, Umbrella } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
-import { RatingCurve, distanceWeight, type Goal } from '@/domain'
+import { RatingCurve, distanceWeight, type Goal, type GoalGroup } from '@/domain'
 import { cn } from '@/lib/cn'
 import { fmtDate } from '@/lib/date'
 import { hexToRgba } from '@/lib/palette'
@@ -20,12 +20,14 @@ function ratingSeries(goal: Goal, halfLifeMonths: number, now: string): number[]
 
 export function GoalCard({
   goal,
+  group,
   halfLifeMonths,
   happiness,
   badge,
   onEdit,
 }: {
   goal: Goal
+  group?: GoalGroup
   halfLifeMonths: number
   happiness: number
   badge?: ReactNode
@@ -117,9 +119,16 @@ export function GoalCard({
 
         <div className="mt-auto flex min-h-[1.625rem] flex-wrap items-center gap-1.5">
           {badge}
+          {group && <Chip dot={group.color ?? goal.color}>{group.name}</Chip>}
           <Chip className="gap-1">
             {ratingLabel === 'varies' ? 'rating varies' : `rated ${ratingLabel}/${MAX_RATING}`}
           </Chip>
+          {goal.umbrella && (
+            <Chip className="gap-1 border-clay/40 text-clay">
+              <Umbrella className="size-3" />
+              +{Math.round(goal.umbrella.boost * 100)}%
+            </Chip>
+          )}
         </div>
       </Card>
 

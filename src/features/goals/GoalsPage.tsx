@@ -1,16 +1,18 @@
-import { Sparkles, Target, Plus, Wallet } from 'lucide-react'
+import { ArrowUp, Sparkles, Target, Plus, Wallet } from 'lucide-react'
 import { motion } from 'motion/react'
-import { useMemo, useState } from 'react'
-import { goalHappiness, type Goal, type HappinessOptions } from '@/domain'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { goalHappiness, umbrellaSources, type Goal, type HappinessOptions } from '@/domain'
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
 import { addMonthsISO, fmtMonthYear } from '@/lib/date'
-import { useActiveBoxes, useBankedHappiness, useGoalBudget, useGoalFundingBoxes, useGoals, useScheduledPlan } from '@/store/selectors'
+import { useActiveBoxes, useBankedHappiness, useGoalBudget, useGoalFundingBoxes, useGoalGroups, useGoals, useScheduledPlan } from '@/store/selectors'
 import { useViewDate } from '@/store/time'
 import { useStore } from '@/store/store'
 import { Button, Card, Chip, Money, Segmented } from '@/ui'
 import { GoalCard } from './GoalCard'
 import { GoalEditor } from './GoalEditor'
+import { GoalStack } from './GoalStack'
 import { HappinessChart, type HappinessTrack } from './HappinessChart'
 import { STATUS_META, STATUS_ORDER } from './goal-meta'
 
@@ -52,10 +54,12 @@ function EmptyState({ onNew }: { onNew: () => void }) {
 
 export default function GoalsPage() {
   const goals = useGoals()
+  const goalGroups = useGoalGroups()
   const settings = useStore((s) => s.settings)
   const updateSettings = useStore((s) => s.updateSettings)
   const setGoalStatus = useStore((s) => s.setGoalStatus)
   const boxes = useActiveBoxes()
+  const groupById = useMemo(() => new Map(goalGroups.map((g) => [g.id, g])), [goalGroups])
 
   const now = useViewDate()
   const horizon = addMonthsISO(now, HORIZON_MONTHS)
@@ -77,8 +81,44 @@ export default function GoalsPage() {
     () => new Map(plan.scheduled.map((s) => [s.goal.id, s])),
     [plan],
   )
+  const droppedById = useMemo(
+    () => new Map(plan.dropped.map((d) => [d.goal.id, d])),
+    [plan],
+  )
+  // The active multiplier field for card worths: done umbrellas (from their
+  // achieved date) plus the plan's scheduled umbrellas (from when it lands).
+  const cardUmbrellas = useMemo(
+    () =>
+      umbrellaSources(goals, opts, (g) =>
+        g.status === 'done' && g.doneDate ? g.doneDate : (scheduledById.get(g.id)?.achieveDate ?? null),
+      ),
+    [goals, opts, scheduledById],
+  )
   // "Now" if achieved today, else the month it lands in.
   const whenLabel = (achieveDate: string) => (achieveDate <= now ? 'Now' : fmtMonthYear(achieveDate))
+
+  // A goal's card worth + status badge — shared by standalone cards and stacks.
+  const cardOf = (g: Goal) => {
+    const achieveDate = g.status === 'done' && g.doneDate ? g.doneDate : now
+    const happiness = goalHappiness(g, achieveDate, opts, cardUmbrellas)
+    const scheduled = scheduledById.get(g.id)
+    const dropped = droppedById.get(g.id)
+    const badge =
+      g.status === 'open' ? (
+        scheduled ? (
+          <Chip className="gap-1 border-sage/40 text-sage">
+            <Sparkles className="size-3" />
+            {whenLabel(scheduled.achieveDate)}
+            {scheduled.until && ` · upgrades ${whenLabel(scheduled.until)}`}
+          </Chip>
+        ) : dropped?.reason === 'alternative' ? (
+          <Chip className="text-faint">Alternative</Chip>
+        ) : (
+          <Chip className="text-faint">Won’t fit</Chip>
+        )
+      ) : undefined
+    return { happiness, badge }
+  }
 
   const [chartMode, setChartMode] = useState<'banked' | 'plan'>('plan')
   const [editorOpen, setEditorOpen] = useState(false)
@@ -92,11 +132,24 @@ export default function GoalsPage() {
     setEditorOpen(true)
   }
 
+  // Deep link from elsewhere (e.g. an achieved-goal row in the activity feed):
+  // `/goals?edit=<id>` opens that goal's editor, then the param is consumed so
+  // closing the editor doesn't immediately reopen it.
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const id = searchParams.get('edit')
+    if (!id) return
+    const g = goals.find((x) => x.id === id)
+    if (g) openEdit(g)
+    searchParams.delete('edit')
+    setSearchParams(searchParams, { replace: true })
+  }, [searchParams, goals, setSearchParams])
+
   // tracks for the happiness chart: achieved goals, plus (optionally) the plan
   const tracks = useMemo<HappinessTrack[]>(() => {
     const done: HappinessTrack[] = goals
       .filter((g) => g.status === 'done' && g.doneDate)
-      .map((g) => ({ id: g.id, name: g.name, color: g.color, achieveDate: g.doneDate!, value: g.value }))
+      .map((g) => ({ id: g.id, name: g.name, color: g.color, achieveDate: g.doneDate!, value: g.value, umbrella: g.umbrella }))
     if (chartMode === 'banked') return done
     const planned: HappinessTrack[] = plan.scheduled.map((s) => ({
       id: s.goal.id,
@@ -104,6 +157,7 @@ export default function GoalsPage() {
       color: s.goal.color,
       achieveDate: s.achieveDate,
       value: s.goal.value,
+      umbrella: s.goal.umbrella,
       planned: true,
     }))
     return [...done, ...planned]
@@ -211,12 +265,16 @@ export default function GoalsPage() {
                 density={s.density}
                 maxDensity={maxDensity}
                 when={whenLabel(s.achieveDate)}
+                upgradeFromName={
+                  s.upgradeFrom ? plan.scheduled.find((x) => x.goal.id === s.upgradeFrom)?.goal.name : undefined
+                }
+                upgradesAt={s.until ? whenLabel(s.until) : undefined}
                 onAchieve={() => setGoalStatus(s.goal.id, 'done')}
               />
             ))}
             {plan.dropped.length > 0 && (
               <div className="mt-3 border-t border-line pt-3">
-                <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-faint">Won’t fit in time</div>
+                <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-faint">Not in the plan</div>
                 {plan.dropped.map((s) => (
                   <PlanRow
                     key={s.goal.id}
@@ -225,7 +283,13 @@ export default function GoalsPage() {
                     happiness={s.happiness}
                     density={s.density}
                     maxDensity={maxDensity}
-                    note={s.reason === 'not-worth-it' ? 'no happiness' : 'over budget'}
+                    note={
+                      s.reason === 'not-worth-it'
+                        ? 'no happiness'
+                        : s.reason === 'alternative'
+                          ? 'not chosen'
+                          : 'over budget'
+                    }
                     dimmed
                   />
                 ))}
@@ -276,39 +340,56 @@ export default function GoalsPage() {
               <span className="text-sm text-faint">{group.length}</span>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {group.map((g, i) => {
-                const achieveDate = g.status === 'done' && g.doneDate ? g.doneDate : now
-                const happiness = goalHappiness(g, achieveDate, opts)
-                const scheduled = scheduledById.get(g.id)
-                const badge =
-                  g.status === 'open' ? (
-                    scheduled ? (
-                      <Chip className="gap-1 border-sage/40 text-sage">
-                        <Sparkles className="size-3" />
-                        {whenLabel(scheduled.achieveDate)}
-                      </Chip>
-                    ) : (
-                      <Chip className="text-faint">Won’t fit</Chip>
+              {(() => {
+                // Render one cell per goal — but collapse same-group alternatives
+                // into a single fanning stack (placed where the first member sits).
+                const seenGroups = new Set<string>()
+                const cells: React.ReactNode[] = []
+                group.forEach((g, i) => {
+                  const entrance = {
+                    initial: { opacity: 0, y: 12 },
+                    animate: { opacity: 1, y: 0 },
+                    transition: { duration: 0.4, delay: i * 0.04, ease: [0.16, 1, 0.3, 1] as const },
+                  }
+                  if (g.groupId) {
+                    if (seenGroups.has(g.groupId)) return
+                    seenGroups.add(g.groupId)
+                    const members = group
+                      .filter((m) => m.groupId === g.groupId)
+                      .map((m) => ({ goal: m, ...cardOf(m) }))
+                      // primary on top: the planner's pick first, then by worth
+                      .sort(
+                        (a, b) =>
+                          Number(scheduledById.has(b.goal.id)) - Number(scheduledById.has(a.goal.id)) ||
+                          b.happiness - a.happiness,
+                      )
+                    cells.push(
+                      <GoalStack
+                        key={`grp-${g.groupId}`}
+                        group={groupById.get(g.groupId)}
+                        halfLifeMonths={halfLifeMonths}
+                        items={members}
+                        onEdit={openEdit}
+                        entranceDelay={i * 0.04}
+                      />,
                     )
-                  ) : undefined
-                return (
-                  <motion.div
-                    key={g.id}
-                    className="h-full"
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: i * 0.04, ease: [0.16, 1, 0.3, 1] }}
-                  >
-                    <GoalCard goal={g} halfLifeMonths={halfLifeMonths} happiness={happiness} badge={badge} onEdit={() => openEdit(g)} />
-                  </motion.div>
-                )
-              })}
+                  } else {
+                    const { happiness, badge } = cardOf(g)
+                    cells.push(
+                      <motion.div key={g.id} className="h-full" {...entrance}>
+                        <GoalCard goal={g} halfLifeMonths={halfLifeMonths} happiness={happiness} badge={badge} onEdit={() => openEdit(g)} />
+                      </motion.div>,
+                    )
+                  }
+                })
+                return cells
+              })()}
             </div>
           </section>
         )
       })}
 
-      <GoalEditor key={editing?.id ?? 'new'} open={editorOpen} onOpenChange={setEditorOpen} goal={editing} />
+      <GoalEditor key={editing?.id ?? 'new'} open={editorOpen} onOpenChange={setEditorOpen} goal={editing} onNavigate={setEditing} />
     </Page>
   )
 }
@@ -322,6 +403,8 @@ function PlanRow({
   maxDensity,
   when,
   note,
+  upgradeFromName,
+  upgradesAt,
   dimmed,
   onAchieve,
 }: {
@@ -335,6 +418,10 @@ function PlanRow({
   when?: string
   /** why a dropped goal didn't make the cut */
   note?: string
+  /** the cheaper goal this one upgrades from (set on the upgrade target) */
+  upgradeFromName?: string
+  /** when this goal is itself replaced by an upgrade (set on the cheaper half) */
+  upgradesAt?: string
   dimmed?: boolean
   onAchieve?: () => void
 }) {
@@ -349,10 +436,19 @@ function PlanRow({
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-sm text-ink">{goal.name}</span>
+            {upgradeFromName && (
+              <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-clay/15 px-1.5 py-0.5 text-[10px] font-medium text-clay">
+                <ArrowUp className="size-2.5" />
+                from {upgradeFromName}
+              </span>
+            )}
             {when && (
               <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${when === 'Now' ? 'bg-sage/15 text-sage' : 'bg-raised text-muted'}`}>
                 {when}
               </span>
+            )}
+            {upgradesAt && (
+              <span className="shrink-0 text-[10px] uppercase tracking-[0.08em] text-faint">→ upgrades {upgradesAt}</span>
             )}
             {note && <span className="shrink-0 text-[10px] uppercase tracking-[0.08em] text-faint">{note}</span>}
           </div>

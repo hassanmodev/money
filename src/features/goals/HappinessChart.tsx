@@ -3,7 +3,7 @@ import { scaleLinear, scaleTime } from 'd3-scale'
 import { area, curveMonotoneX, line } from 'd3-shape'
 import { AnimatePresence, motion } from 'motion/react'
 import { useId, useRef, useState } from 'react'
-import { RatingCurve, distanceWeight, type GoalValue, type ISODate } from '@/domain'
+import { RATING_MAX, RatingCurve, distanceWeight, type GoalValue, type ISODate } from '@/domain'
 import { useElementWidth, useIsMobile } from '@/lib/hooks'
 import { hexToRgba } from '@/lib/palette'
 
@@ -17,6 +17,8 @@ export interface HappinessTrack {
   color: string
   achieveDate: ISODate
   value: GoalValue
+  /** when set, this track amplifies every *other* band once it's achieved */
+  umbrella?: { boost: number }
   /** recommended-but-not-yet-achieved — drawn lighter, dashed marker */
   planned?: boolean
 }
@@ -58,13 +60,35 @@ export function HappinessChart({
   const yearsAt = (t: number) => (t - t0) / MS_PER_YEAR
   const idx = times.map((_, i) => i)
 
-  // each track's discounted rate at every sample (0 before it's achieved)
+  // umbrella tracks → the time-varying multiplier their boost contributes,
+  // active only once each is achieved and scaled by its own rating.
+  const umb = tracks
+    .filter((tr) => tr.umbrella)
+    .map((tr) => ({
+      id: tr.id,
+      boost: tr.umbrella!.boost,
+      curve: new RatingCurve(tr.value, now),
+      achY: (parseISO(tr.achieveDate).getTime() - t0) / MS_PER_YEAR,
+    }))
+  const multAt = (yy: number, excludeId: string) => {
+    let m = 1
+    for (const u of umb) {
+      if (u.id === excludeId || yy + 1e-9 < u.achY) continue
+      const frac = Math.max(0, Math.min(1, u.curve.rateAt(yy) / RATING_MAX))
+      m *= 1 + u.boost * frac
+    }
+    return m
+  }
+
+  // each track's discounted rate at every sample (0 before it's achieved),
+  // lifted by every *other* umbrella in force at that moment
   const series = tracks.map((tr) => {
     const curve = new RatingCurve(tr.value, now)
     const achY = (parseISO(tr.achieveDate).getTime() - t0) / MS_PER_YEAR
     return times.map((t) => {
       const yy = yearsAt(t)
-      return yy + 1e-9 >= achY ? curve.rateAt(yy) * distanceWeight(yy, halfLifeMonths) : 0
+      if (yy + 1e-9 < achY) return 0
+      return curve.rateAt(yy) * distanceWeight(yy, halfLifeMonths) * multAt(yy, tr.id)
     })
   })
 

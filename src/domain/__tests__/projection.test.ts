@@ -29,6 +29,7 @@ const state = (boxes: Box[], transactions: Transaction[] = [], goals: FinanceSta
   boxes,
   transactions,
   goals,
+  goalGroups: [],
   settings,
 })
 

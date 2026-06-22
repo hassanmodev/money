@@ -13,6 +13,7 @@ import {
   type FinanceState,
   type Goal,
   type GoalFundingBox,
+  type GoalGroup,
   type HappinessOptions,
   type ProjectionOptions,
   type ProjectionResult,
@@ -30,10 +31,11 @@ export function useFinanceState(): FinanceState {
   const boxes = useStore((s) => s.boxes)
   const transactions = useStore((s) => s.transactions)
   const goals = useStore((s) => s.goals)
+  const goalGroups = useStore((s) => s.goalGroups)
   const settings = useStore((s) => s.settings)
   return useMemo(
-    () => ({ boxes, transactions, goals, settings }),
-    [boxes, transactions, goals, settings],
+    () => ({ boxes, transactions, goals, goalGroups, settings }),
+    [boxes, transactions, goals, goalGroups, settings],
   )
 }
 
@@ -44,6 +46,10 @@ export function useActiveBoxes() {
 
 export function useGoals(): Goal[] {
   return useStore((s) => s.goals)
+}
+
+export function useGoalGroups(): GoalGroup[] {
+  return useStore((s) => s.goalGroups)
 }
 
 /**
@@ -57,7 +63,7 @@ export function useScheduledPlan(opts: HappinessOptions): ScheduledPlan {
     const months = Math.max(1, Math.round(yearsBetween(opts.now, opts.horizon) * 12))
     const grid = Array.from({ length: months + 1 }, (_, i) => addMonthsISO(opts.now, i))
     const budgetCurve = goalBudgetCurve(state, grid)
-    return planGoalsScheduled(state.goals, { ...opts, grid, budgetCurve })
+    return planGoalsScheduled(state.goals, { ...opts, grid, budgetCurve, groups: state.goalGroups })
   }, [state, opts.now, opts.horizon, opts.halfLifeMonths])
 }
 

@@ -6,6 +6,7 @@ import type {
   Effect,
   FinanceState,
   Goal,
+  GoalGroup,
   GoalStatus,
   Settings,
   Transaction,
@@ -18,6 +19,7 @@ import { createEmpty, createSeed } from './seed'
 type NewBox = Omit<Box, 'id' | 'createdAt'>
 type NewTransaction = Omit<Transaction, 'id' | 'createdAt'>
 type NewGoal = Omit<Goal, 'id' | 'createdAt'>
+type NewGoalGroup = Omit<GoalGroup, 'id' | 'createdAt'>
 
 interface Actions {
   addBox: (box: NewBox) => string
@@ -36,6 +38,12 @@ interface Actions {
   removeGoal: (id: string) => void
   /** Mark a goal achieved / shelved / wanted again, stamping the achieved date. */
   setGoalStatus: (id: string, status: GoalStatus, doneDate?: string) => void
+
+  /** Create an alternative-set; returns its id so a goal can join it. */
+  addGoalGroup: (group: NewGoalGroup) => string
+  updateGoalGroup: (id: string, patch: Partial<GoalGroup>) => void
+  /** Remove a group, clearing its `groupId` off every member (goals are kept). */
+  removeGoalGroup: (id: string) => void
 
   updateSettings: (patch: Partial<Settings>) => void
   setRate: (code: string, rate: number) => void
@@ -135,6 +143,22 @@ export const useStore = create<Store>()(
           ),
         })),
 
+      addGoalGroup: (group) => {
+        const id = newId('grp')
+        set((s) => ({ goalGroups: [...s.goalGroups, { ...group, id, createdAt: now() }] }))
+        return id
+      },
+      updateGoalGroup: (id, patch) =>
+        set((s) => ({
+          goalGroups: s.goalGroups.map((gr) => (gr.id === id ? { ...gr, ...patch } : gr)),
+        })),
+      removeGoalGroup: (id) =>
+        set((s) => ({
+          goalGroups: s.goalGroups.filter((gr) => gr.id !== id),
+          // free the members; never delete the goals themselves
+          goals: s.goals.map((g) => (g.groupId === id ? { ...g, groupId: undefined } : g)),
+        })),
+
       updateSettings: (patch) =>
         set((s) => ({ settings: { ...s.settings, ...patch } })),
       setRate: (code, rate) =>
@@ -168,11 +192,12 @@ export const useStore = create<Store>()(
     }),
     {
       name: 'cozy-money/v1',
-      version: 3,
+      version: 4,
       // Older saves predate goals — fold in an empty list so the engine is safe.
       // v3 moved funding from per-goal `boxIds` onto a box `fundsGoals` flag:
       // any box a goal used to draw from joins the shared pool, and the now-dead
       // `boxIds` field is stripped off each goal.
+      // v4 adds alternative-sets — seed an empty `goalGroups` list.
       migrate: (persisted, version) => {
         const s = persisted as Partial<FinanceState>
         if (version < 2 && !s.goals) s.goals = []
@@ -188,6 +213,7 @@ export const useStore = create<Store>()(
             return next
           })
         }
+        if (version < 4 && !s.goalGroups) s.goalGroups = []
         return s as FinanceState
       },
       // persist only the data, never the action functions
@@ -195,6 +221,7 @@ export const useStore = create<Store>()(
         boxes: s.boxes,
         transactions: s.transactions,
         goals: s.goals,
+        goalGroups: s.goalGroups,
         settings: s.settings,
       }),
       // Fold the persisted custom currencies back into the live catalogue once
@@ -209,7 +236,7 @@ export const useStore = create<Store>()(
 /** Read the live state outside React (e.g. for one-off calculations). */
 export const financeState = (): FinanceState => {
   const s = useStore.getState()
-  return { boxes: s.boxes, transactions: s.transactions, goals: s.goals, settings: s.settings }
+  return { boxes: s.boxes, transactions: s.transactions, goals: s.goals, goalGroups: s.goalGroups, settings: s.settings }
 }
 
 export { todayISO }

@@ -14,6 +14,7 @@ export function createEmpty(): FinanceState {
     boxes: [],
     transactions: [],
     goals: [],
+    goalGroups: [],
   }
 }
 
@@ -143,6 +144,12 @@ export function createSeed(): FinanceState {
       g('goal-japan', 'Two weeks in Japan', 4800, 9, '#db8a82', 'The big one.'),
       g('goal-laptop', 'New laptop', 1900, 6, '#8aa0c8'),
       {
+        // An umbrella: cheap, highly rated, and it lifts every other goal by
+        // up to 15% once it lands.
+        ...g('goal-calm', 'A calmer routine', 1200, 8, '#b58ad0', 'Lifts everything else a little.'),
+        umbrella: { boost: 0.15 },
+      },
+      {
         id: 'goal-bike',
         name: 'Road bike',
         cost: 1300,
@@ -165,6 +172,22 @@ export function createSeed(): FinanceState {
         doneDate: '2026-04-15',
       },
       { ...g('goal-watch', 'Vintage watch', 3200, 4, '#cba24f', 'Maybe one day.'), status: 'dismissed' },
+
+      // ── an alternative-set: three phones, one slot. The planner picks the
+      // best — or, since the group allows it, buys cheap now and upgrades later.
+      { ...g('goal-phone-budget', 'Budget phone', 320, 5, '#7fb0c4'), groupId: 'grp-phone' },
+      { ...g('goal-phone-mid', 'Mid-range phone', 620, 7, '#7fb0c4'), groupId: 'grp-phone' },
+      { ...g('goal-phone-pro', 'Flagship phone', 1150, 9, '#7fb0c4', 'The one you really want.'), groupId: 'grp-phone' },
+    ],
+    goalGroups: [
+      {
+        id: 'grp-phone',
+        name: 'New phone',
+        upgradable: true,
+        upgradeLoss: 0.15,
+        color: '#7fb0c4',
+        createdAt: CREATED,
+      },
     ],
   }
 }

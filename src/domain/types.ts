@@ -173,6 +173,24 @@ export type GoalValue =
   | { type: 'periods'; points: GoalRatingPoint[] }
 
 /**
+ * A set of mutually-exclusive goals — competing options the planner treats as
+ * one slot, picking the single best member rather than buying them all. When
+ * `upgradable` is set the planner may instead sequence two members as a
+ * buy-cheap-then-upgrade path, paying a switching cost that forfeits a fraction
+ * (`upgradeLoss`, default 0.15) of the older item's value.
+ */
+export interface GoalGroup {
+  id: string
+  name: string
+  /** let the planner sequence two members as buy-cheap-then-upgrade */
+  upgradable?: boolean
+  /** fraction of the older item's cost forfeited on upgrade (0.15 = 15%) */
+  upgradeLoss?: number
+  color?: string
+  createdAt: ISODateTime
+}
+
+/**
  * Something worth money that buys happiness. The optimizer spends a limited
  * budget — the shared pool of boxes with {@link Box.fundsGoals} set — across
  * goals to maximise total happiness, best bang-for-buck first; achieving one
@@ -184,6 +202,20 @@ export interface Goal {
   name: string
   cost: number // base currency
   value: GoalValue
+  /**
+   * Membership in a {@link GoalGroup} of alternatives. Goals sharing a `groupId`
+   * are mutually exclusive — the planner picks one (or sequences two as an
+   * upgrade). Absent means a standalone goal.
+   */
+  groupId?: string
+  /**
+   * When set, this goal is an *umbrella*: once achieved it lifts the happiness
+   * of every *other* goal. `boost` is the bump at full rating (0.15 = +15%);
+   * the realised lift scales with this goal's own rating over time, so a high-
+   * rated umbrella amplifies everything and a zero-rated one does nothing.
+   * Absent means an ordinary goal.
+   */
+  umbrella?: { boost: number }
   status: GoalStatus
   /** when it was achieved (status 'done') — drives the deduction + marker */
   doneDate?: ISODate
@@ -213,5 +245,7 @@ export interface FinanceState {
   boxes: Box[]
   transactions: Transaction[]
   goals: Goal[]
+  /** alternative-sets the goals reference by id; absent on pre-feature saves */
+  goalGroups: GoalGroup[]
   settings: Settings
 }
