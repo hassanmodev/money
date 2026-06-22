@@ -14,7 +14,6 @@
 import { format, parseISO } from 'date-fns'
 import { realDiscount } from './effects'
 import { FlowNetwork } from './flow'
-import { goalFundingLegs } from './goals'
 import { toBase, convert } from './money'
 import { occurrencesBetween } from './recurrence'
 import type {
@@ -23,6 +22,7 @@ import type {
   FinanceState,
   Goal,
   ISODate,
+  ISODateTime,
   Settings,
   Transaction,
   TxKind,
@@ -47,6 +47,24 @@ export interface Marker {
   /** spend taken out of net worth at this date (base currency) */
   cost: number
   color: string
+  /** a planner-scheduled (not yet achieved) buy, forecast onto the timeline */
+  planned?: boolean
+}
+
+/**
+ * A planner-scheduled buy not yet achieved, forecast onto the projection as a
+ * future outflow so time-travel shows the money leaving on its planned date.
+ * Derived on the fly from the plan, never persisted — exactly like the synthetic
+ * expense a `done` goal makes, but for an `open` goal the planner intends to buy.
+ */
+export interface PlannedBuy {
+  id: string
+  label: string
+  date: ISODate
+  /** base-currency spend this leg commits (the plan's cost, incl. upgrade legs) */
+  cost: number
+  color: string
+  createdAt: ISODateTime
 }
 
 export interface ProjectionResult {
@@ -92,31 +110,51 @@ function expand(tx: Transaction, from: ISODate, to: ISODate): Occurrence[] {
   }))
 }
 
+/** Split one base-currency spend across the funding pool as synthetic expenses. */
+function poolExpenses(
+  id: string,
+  date: ISODate,
+  cost: number,
+  pool: string[],
+  baseCurrency: CurrencyCode,
+  createdAt: ISODateTime,
+): Transaction[] {
+  if (pool.length === 0) return []
+  const each = cost / pool.length
+  return pool.map((boxId) => ({
+    id: `${id}-${boxId}`,
+    kind: 'expense' as const,
+    boxId,
+    amount: each, // base currency; simulate converts into the box
+    currency: baseCurrency,
+    date,
+    createdAt,
+  }))
+}
+
 /**
- * Turn achieved (`done`) goals into synthetic expenses, so the money they cost
- * actually leaves the projection. The spend is split across the goal-funding
- * pool (the boxes in `boxes` with {@link Box.fundsGoals} set); each leg rides
- * through `simulate` as a plain base-currency expense and is converted into the
- * box's currency there. When nothing funds goals the spend lands nowhere — the
- * goals are advisory markers only. These are computed on the fly, never
- * persisted, never shown in the activity feed.
+ * Turn achieved (`done`) goals — and any `planned` buys the caller forecasts —
+ * into synthetic expenses, so the money they cost actually leaves the projection.
+ * Each spend is split across the goal-funding pool (the boxes in `boxes` with
+ * {@link Box.fundsGoals} set); each leg rides through `simulate` as a plain
+ * base-currency expense and is converted into the box's currency there. When
+ * nothing funds goals the spend lands nowhere — the goals are advisory markers
+ * only. These are computed on the fly, never persisted, never in the activity feed.
  */
-function goalOutflows(goals: Goal[], boxes: Box[], baseCurrency: CurrencyCode): Transaction[] {
+function goalOutflows(
+  goals: Goal[],
+  boxes: Box[],
+  baseCurrency: CurrencyCode,
+  planned: PlannedBuy[] = [],
+): Transaction[] {
   const pool = boxes.filter((b) => b.fundsGoals).map((b) => b.id)
   const out: Transaction[] = []
   for (const g of goals) {
     if (g.status !== 'done' || !g.doneDate) continue
-    for (const leg of goalFundingLegs(g, pool)) {
-      out.push({
-        id: `goal-${g.id}-${leg.boxId}`,
-        kind: 'expense',
-        boxId: leg.boxId,
-        amount: leg.baseAmount, // base currency; simulate converts into the box
-        currency: baseCurrency,
-        date: g.doneDate,
-        createdAt: g.createdAt,
-      })
-    }
+    out.push(...poolExpenses(`goal-${g.id}`, g.doneDate, g.cost, pool, baseCurrency, g.createdAt))
+  }
+  for (const p of planned) {
+    out.push(...poolExpenses(`planned-${p.id}`, p.date, p.cost, pool, baseCurrency, p.createdAt))
   }
   return out
 }
@@ -203,7 +241,11 @@ function simulate(
   return out
 }
 
-export function project(state: FinanceState, opts: ProjectionOptions): ProjectionResult {
+export function project(
+  state: FinanceState,
+  opts: ProjectionOptions,
+  plannedBuys: PlannedBuy[] = [],
+): ProjectionResult {
   const { settings } = state
   const goals = state.goals ?? []
   const active = state.boxes.filter((b) => !b.archived)
@@ -217,7 +259,7 @@ export function project(state: FinanceState, opts: ProjectionOptions): Projectio
   )
   const sampleDates = sampleTimes.map(iso)
 
-  const txns = [...state.transactions, ...goalOutflows(goals, active, settings.baseCurrency)]
+  const txns = [...state.transactions, ...goalOutflows(goals, active, settings.baseCurrency, plannedBuys)]
   const series = simulate(active, txns, settings, sampleTimes)
   const perBoxBase: Record<string, number[]> = {}
   for (const box of active) {
@@ -240,9 +282,15 @@ export function project(state: FinanceState, opts: ProjectionOptions): Projectio
     return { date: sampleDates[i], t, nominal, real: real * globalDiscount, perBox }
   })
 
-  const markers: Marker[] = goals
-    .filter((g) => g.status === 'done' && g.doneDate && g.doneDate >= opts.from && g.doneDate <= opts.to)
-    .map((g) => ({ id: g.id, label: g.name, date: g.doneDate!, cost: g.cost, color: g.color }))
+  const inWindow = (d: ISODate) => d >= opts.from && d <= opts.to
+  const markers: Marker[] = [
+    ...goals
+      .filter((g) => g.status === 'done' && g.doneDate && inWindow(g.doneDate))
+      .map((g) => ({ id: g.id, label: g.name, date: g.doneDate!, cost: g.cost, color: g.color })),
+    ...plannedBuys
+      .filter((p) => inWindow(p.date))
+      .map((p) => ({ id: `planned-${p.id}`, label: p.label, date: p.date, cost: p.cost, color: p.color, planned: true })),
+  ]
 
   const currentNominal = points[0]?.nominal ?? 0
   return {
@@ -268,20 +316,21 @@ export function boxValueAt(
   state: FinanceState,
   boxId: string,
   dateISO: ISODate,
+  plannedBuys: PlannedBuy[] = [],
 ): number {
   const active = state.boxes.filter((b) => !b.archived)
   const boxes = active.some((b) => b.id === boxId)
     ? active
     : state.boxes.filter((b) => b.id === boxId)
-  const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], boxes, state.settings.baseCurrency)]
+  const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], boxes, state.settings.baseCurrency, plannedBuys)]
   const series = simulate(boxes, txns, state.settings, [parseISO(dateISO).getTime()])
   return series[boxId]?.[0] ?? 0
 }
 
 /** Total net worth on a date, in the base currency. */
-export function netWorthAt(state: FinanceState, dateISO: ISODate): number {
+export function netWorthAt(state: FinanceState, dateISO: ISODate, plannedBuys: PlannedBuy[] = []): number {
   const active = state.boxes.filter((b) => !b.archived)
-  const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], active, state.settings.baseCurrency)]
+  const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], active, state.settings.baseCurrency, plannedBuys)]
   const series = simulate(active, txns, state.settings, [parseISO(dateISO).getTime()])
   return active.reduce(
     (sum, b) => sum + toBase(series[b.id][0], b.currency, state.settings),
