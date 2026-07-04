@@ -610,15 +610,3 @@ export function planGoalsScheduled(goals: Goal[], opts: ScheduleOptions): Schedu
   const spend = scheduled.reduce((sum, s) => sum + s.cost, 0)
   return { scheduled, dropped, happiness, spend }
 }
-
-/**
- * A goal's spend, split evenly across the funding pool (`fundingBoxIds`), each
- * leg in that box's own currency-agnostic *base* amount. Used to draw the cost
- * out of the projection on the day a goal is achieved. When the pool is empty
- * nothing is drawn (goals are advisory markers only).
- */
-export function goalFundingLegs(goal: Goal, fundingBoxIds: string[]): { boxId: string; baseAmount: number }[] {
-  if (fundingBoxIds.length === 0) return []
-  const each = goal.cost / fundingBoxIds.length
-  return fundingBoxIds.map((boxId) => ({ boxId, baseAmount: each }))
-}

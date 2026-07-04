@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boxValueAt, netWorthAt, project } from '../projection'
+import { boxValueAt, netWorthAt, project, type PlannedBuy } from '../projection'
 import type { Box, Effect, FinanceState, Goal, Settings, Transaction } from '../types'
 
 const settings: Settings = { baseCurrency: 'EUR', rates: { USD: 0.9 } }
@@ -240,6 +240,40 @@ describe('achieved goals draw down net worth', () => {
     const r = project(world, { from: '2026-01-01', to: '2026-12-31' })
     expect(r.markers).toHaveLength(1)
     expect(r.markers[0]).toMatchObject({ id: 'goal', date: '2026-03-01', cost: 300 })
+  })
+})
+
+describe('planned buys forecast onto the projection', () => {
+  const planned: PlannedBuy = {
+    id: 'p1',
+    label: 'Trip',
+    date: '2027-01-01',
+    cost: 300,
+    color: '#9eb87f',
+    createdAt: '2026-01-01T00:00:00Z',
+  }
+
+  it('deducts a planned buy at its date, like an achieved goal would', () => {
+    const sav = box({ id: 'sav', openingBalance: 1000, fundsGoals: true })
+    const world = state([sav])
+    // no forecast passed → the open buy is invisible, money stays put
+    expect(netWorthAt(world, '2027-06-01')).toBeCloseTo(1000, 6)
+    // with the forecast → nothing before its date, deducted from its date on
+    expect(netWorthAt(world, '2026-06-01', [planned])).toBeCloseTo(1000, 6)
+    expect(netWorthAt(world, '2027-06-01', [planned])).toBeCloseTo(700, 6)
+    expect(boxValueAt(world, 'sav', '2027-06-01', [planned])).toBeCloseTo(700, 6)
+  })
+
+  it('draws nothing when no box funds goals — a forecast is still advisory', () => {
+    const plain = box({ id: 'plain', openingBalance: 1000 }) // fundsGoals not set
+    expect(netWorthAt(state([plain]), '2027-06-01', [planned])).toBeCloseTo(1000, 6)
+  })
+
+  it('surfaces planned buys as distinct (planned) markers', () => {
+    const sav = box({ id: 'sav', openingBalance: 1000, fundsGoals: true })
+    const r = project(state([sav]), { from: '2026-01-01', to: '2028-01-01' }, [planned])
+    const m = r.markers.find((x) => x.planned)
+    expect(m).toMatchObject({ label: 'Trip', date: '2027-01-01', cost: 300, planned: true })
   })
 })
 

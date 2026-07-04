@@ -2,11 +2,11 @@ import { ArrowUp, Sparkles, Target, Plus, Wallet } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { goalHappiness, umbrellaSources, type Goal, type HappinessOptions } from '@/domain'
+import { goalHappiness, umbrellaSources, type Goal, type GoalStatus, type HappinessOptions } from '@/domain'
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
-import { addMonthsISO, fmtMonthYear } from '@/lib/date'
-import { useActiveBoxes, useBankedHappiness, useGoalBudget, useGoalFundingBoxes, useGoalGroups, useGoals, useScheduledPlan } from '@/store/selectors'
+import { addMonthsISO, fmtMonthYear, todayISO } from '@/lib/date'
+import { useActiveBoxes, useBankedHappiness, useCommittedPlan, useGoalBudget, useGoalFundingBoxes, useGoalGroups, useGoals } from '@/store/selectors'
 import { useViewDate } from '@/store/time'
 import { useStore } from '@/store/store'
 import { Button, Card, Chip, Money, Segmented } from '@/ui'
@@ -61,7 +61,11 @@ export default function GoalsPage() {
   const boxes = useActiveBoxes()
   const groupById = useMemo(() => new Map(goalGroups.map((g) => [g.id, g])), [goalGroups])
 
+  // The time cursor — "what's happened by when". The plan itself is anchored at
+  // the real today (useCommittedPlan), so scrubbing the cursor reveals which buys
+  // have already happened rather than re-planning from the cursor.
   const now = useViewDate()
+  const today = todayISO()
   const horizon = addMonthsISO(now, HORIZON_MONTHS)
   const halfLifeMonths = settings.happinessHalfLifeMonths ?? 24
   const opts: HappinessOptions = useMemo(
@@ -75,7 +79,7 @@ export default function GoalsPage() {
   const funding = useGoalFundingBoxes()
   const boxById = useMemo(() => new Map(boxes.map((b) => [b.id, b])), [boxes])
 
-  const plan = useScheduledPlan(opts)
+  const plan = useCommittedPlan()
   const banked = useBankedHappiness(opts)
   const scheduledById = useMemo(
     () => new Map(plan.scheduled.map((s) => [s.goal.id, s])),
@@ -85,6 +89,19 @@ export default function GoalsPage() {
     () => new Map(plan.dropped.map((d) => [d.goal.id, d])),
     [plan],
   )
+
+  // The date a goal has actually *happened* by the cursor: its real achieved
+  // date, or — once the cursor passes it — the committed plan's buy date. Money
+  // is already out by then, so the goal reads as done. ("Now" buys aren't
+  // auto-committed: only genuinely future buys flip when the cursor reaches them.)
+  const happenedDate = (g: Goal): string | undefined => {
+    if (g.status === 'done' && g.doneDate) return g.doneDate
+    const s = scheduledById.get(g.id)
+    return s && s.achieveDate > today && s.achieveDate <= now ? s.achieveDate : undefined
+  }
+  const effStatus = (g: Goal): GoalStatus =>
+    g.status === 'dismissed' ? 'dismissed' : happenedDate(g) ? 'done' : 'open'
+
   // The active multiplier field for card worths: done umbrellas (from their
   // achieved date) plus the plan's scheduled umbrellas (from when it lands).
   const cardUmbrellas = useMemo(
@@ -94,17 +111,18 @@ export default function GoalsPage() {
       ),
     [goals, opts, scheduledById],
   )
-  // "Now" if achieved today, else the month it lands in.
+  // "Now" if it lands today, else the month it lands in.
   const whenLabel = (achieveDate: string) => (achieveDate <= now ? 'Now' : fmtMonthYear(achieveDate))
 
   // A goal's card worth + status badge — shared by standalone cards and stacks.
   const cardOf = (g: Goal) => {
-    const achieveDate = g.status === 'done' && g.doneDate ? g.doneDate : now
+    const happened = happenedDate(g)
+    const achieveDate = happened ?? now
     const happiness = goalHappiness(g, achieveDate, opts, cardUmbrellas)
     const scheduled = scheduledById.get(g.id)
     const dropped = droppedById.get(g.id)
     const badge =
-      g.status === 'open' ? (
+      effStatus(g) === 'open' ? (
         scheduled ? (
           <Chip className="gap-1 border-sage/40 text-sage">
             <Sparkles className="size-3" />
@@ -117,7 +135,7 @@ export default function GoalsPage() {
           <Chip className="text-faint">Won’t fit</Chip>
         )
       ) : undefined
-    return { happiness, badge }
+    return { happiness, badge, achievedOn: happened }
   }
 
   const [chartMode, setChartMode] = useState<'banked' | 'plan'>('plan')
@@ -145,25 +163,31 @@ export default function GoalsPage() {
     setSearchParams(searchParams, { replace: true })
   }, [searchParams, goals, setSearchParams])
 
-  // tracks for the happiness chart: achieved goals, plus (optionally) the plan
+  // tracks for the happiness chart: what's happened by the cursor (solid), plus
+  // (optionally) the buys still ahead of it (dashed/planned).
   const tracks = useMemo<HappinessTrack[]>(() => {
-    const done: HappinessTrack[] = goals
-      .filter((g) => g.status === 'done' && g.doneDate)
-      .map((g) => ({ id: g.id, name: g.name, color: g.color, achieveDate: g.doneDate!, value: g.value, umbrella: g.umbrella }))
-    if (chartMode === 'banked') return done
-    const planned: HappinessTrack[] = plan.scheduled.map((s) => ({
-      id: s.goal.id,
-      name: s.goal.name,
-      color: s.goal.color,
-      achieveDate: s.achieveDate,
-      value: s.goal.value,
-      umbrella: s.goal.umbrella,
-      planned: true,
-    }))
-    return [...done, ...planned]
-  }, [goals, plan, chartMode])
+    const achieved: HappinessTrack[] = []
+    for (const g of goals) {
+      const on = happenedDate(g)
+      if (on) achieved.push({ id: g.id, name: g.name, color: g.color, achieveDate: on, value: g.value, umbrella: g.umbrella })
+    }
+    if (chartMode === 'banked') return achieved
+    const planned: HappinessTrack[] = plan.scheduled
+      .filter((s) => !happenedDate(s.goal))
+      .map((s) => ({
+        id: s.goal.id,
+        name: s.goal.name,
+        color: s.goal.color,
+        achieveDate: s.achieveDate,
+        value: s.goal.value,
+        umbrella: s.goal.umbrella,
+        planned: true,
+      }))
+    return [...achieved, ...planned]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goals, plan, chartMode, now])
 
-  const openCount = goals.filter((g) => g.status === 'open').length
+  const openCount = goals.filter((g) => effStatus(g) === 'open').length
   const maxDensity = Math.max(
     0,
     ...[...plan.scheduled, ...plan.dropped].map((s) => (Number.isFinite(s.density) ? s.density : 0)),
@@ -255,23 +279,28 @@ export default function GoalsPage() {
           <p className="py-4 text-sm text-faint">No open goals to plan. Add one, or reopen a shelved goal.</p>
         ) : (
           <div className="mt-3 flex flex-col">
-            {plan.scheduled.map((s, i) => (
-              <PlanRow
-                key={s.goal.id}
-                rank={i + 1}
-                goal={s.goal}
-                cost={s.cost}
-                happiness={s.happiness}
-                density={s.density}
-                maxDensity={maxDensity}
-                when={whenLabel(s.achieveDate)}
-                upgradeFromName={
-                  s.upgradeFrom ? plan.scheduled.find((x) => x.goal.id === s.upgradeFrom)?.goal.name : undefined
-                }
-                upgradesAt={s.until ? whenLabel(s.until) : undefined}
-                onAchieve={() => setGoalStatus(s.goal.id, 'done')}
-              />
-            ))}
+            {plan.scheduled.map((s, i) => {
+              // Once the cursor passes a buy's date it has happened — show it as
+              // done, and there's nothing left to "achieve".
+              const happened = happenedDate(s.goal)
+              return (
+                <PlanRow
+                  key={s.goal.id}
+                  rank={i + 1}
+                  goal={s.goal}
+                  cost={s.cost}
+                  happiness={s.happiness}
+                  density={s.density}
+                  maxDensity={maxDensity}
+                  when={happened ? 'Done' : whenLabel(s.achieveDate)}
+                  upgradeFromName={
+                    s.upgradeFrom ? plan.scheduled.find((x) => x.goal.id === s.upgradeFrom)?.goal.name : undefined
+                  }
+                  upgradesAt={s.until ? whenLabel(s.until) : undefined}
+                  onAchieve={happened ? undefined : () => setGoalStatus(s.goal.id, 'done')}
+                />
+              )
+            })}
             {plan.dropped.length > 0 && (
               <div className="mt-3 border-t border-line pt-3">
                 <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-faint">Not in the plan</div>
@@ -327,9 +356,10 @@ export default function GoalsPage() {
         </p>
       </Card>
 
-      {/* the goals themselves, grouped by where they are in life */}
+      {/* the goals themselves, grouped by where they are in life — by *effective*
+          status, so a buy the cursor has passed sits under "Achieved". */}
       {STATUS_ORDER.map((status) => {
-        const group = goals.filter((g) => g.status === status)
+        const group = goals.filter((g) => effStatus(g) === status)
         if (group.length === 0) return null
         const meta = STATUS_META[status]
         return (
@@ -374,10 +404,10 @@ export default function GoalsPage() {
                       />,
                     )
                   } else {
-                    const { happiness, badge } = cardOf(g)
+                    const { happiness, badge, achievedOn } = cardOf(g)
                     cells.push(
                       <motion.div key={g.id} className="h-full" {...entrance}>
-                        <GoalCard goal={g} halfLifeMonths={halfLifeMonths} happiness={happiness} badge={badge} onEdit={() => openEdit(g)} />
+                        <GoalCard goal={g} halfLifeMonths={halfLifeMonths} happiness={happiness} badge={badge} achievedOn={achievedOn} onEdit={() => openEdit(g)} />
                       </motion.div>,
                     )
                   }

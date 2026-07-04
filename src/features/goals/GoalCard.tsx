@@ -24,6 +24,7 @@ export function GoalCard({
   halfLifeMonths,
   happiness,
   badge,
+  achievedOn,
   onEdit,
 }: {
   goal: Goal
@@ -31,6 +32,9 @@ export function GoalCard({
   halfLifeMonths: number
   happiness: number
   badge?: ReactNode
+  /** the date this goal has *happened* by — a real doneDate, or the committed
+   *  plan's buy date once the time cursor has passed it. Shown as achieved. */
+  achievedOn?: string
   onEdit: () => void
 }) {
   const setGoalStatus = useStore((s) => s.setGoalStatus)
@@ -38,7 +42,9 @@ export function GoalCard({
   const now = useViewDate()
   const [confirm, setConfirm] = useState(false)
 
-  const meta = STATUS_META[goal.status]
+  // A goal reads as achieved if it really is, or if a committed buy has happened.
+  const achievedDate = goal.status === 'done' && goal.doneDate ? goal.doneDate : achievedOn
+  const meta = achievedDate ? STATUS_META.done : STATUS_META[goal.status]
   const StatusIcon = meta.icon
   const ratingLabel = goal.value.type === 'flat' ? `${goal.value.rating}` : 'varies'
   const dimmed = goal.status === 'dismissed'
@@ -68,7 +74,7 @@ export function GoalCard({
               <div className="truncate font-medium text-ink">{goal.name}</div>
               <div className="flex items-center gap-1 text-xs text-faint">
                 <StatusIcon className={cn('size-3', meta.tone)} />
-                {goal.status === 'done' && goal.doneDate ? fmtDate(goal.doneDate) : meta.label}
+                {achievedDate ? fmtDate(achievedDate) : meta.label}
               </div>
             </div>
           </div>

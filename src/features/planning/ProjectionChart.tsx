@@ -199,13 +199,13 @@ export function ProjectionChart({
           strokeLinecap="round"
         />
 
-        {/* goal achievements — money leaves here */}
+        {/* goal money-out markers — solid once achieved, hollow while only planned */}
         {result.markers.map((m) => {
           const mx = x(parseISO(m.date).getTime())
           return (
             <g key={m.id}>
-              <line x1={mx} x2={mx} y1={padT} y2={H - padB} stroke={m.color} strokeWidth={1} strokeDasharray="2 4" opacity={0.55} />
-              <circle cx={mx} cy={padT} r={3} fill={m.color} />
+              <line x1={mx} x2={mx} y1={padT} y2={H - padB} stroke={m.color} strokeWidth={1} strokeDasharray={m.planned ? '1 4' : '2 4'} opacity={m.planned ? 0.4 : 0.55} />
+              <circle cx={mx} cy={padT} r={3} fill={m.planned ? 'var(--color-canvas)' : m.color} stroke={m.color} strokeWidth={m.planned ? 1.5 : 0} />
             </g>
           )
         })}

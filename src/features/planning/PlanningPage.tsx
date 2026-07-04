@@ -5,7 +5,7 @@ import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
 import { addMonthsISO } from '@/lib/date'
 import { fmtSignedPercent } from '@/lib/format'
-import { useActiveBoxes, useFinanceState, useProjection } from '@/store/selectors'
+import { useActiveBoxes, useFinanceState, usePlannedBuys, useProjection } from '@/store/selectors'
 import { useStore } from '@/store/store'
 import { useViewDate } from '@/store/time'
 import { Card, Chip, Money, Segmented } from '@/ui'
@@ -48,6 +48,9 @@ export default function PlanningPage() {
   const to = addMonthsISO(from, months)
   const opts = useMemo(() => ({ from, to, steps: 120 }), [from, to])
   const result = useProjection(opts)
+  // Scenario overlays ride the same planned buys as the baseline, so every line
+  // dips on the same goal dates as the model line.
+  const plannedBuys = usePlannedBuys()
 
   // ── scenarios: ephemeral what-if overlays, only baked into the model on save ──
   const [scenarios, setScenarios] = useState<Scenario[]>(() => [newScenario('Scenario A')])
@@ -95,9 +98,9 @@ export default function PlanningPage() {
           id: s.id,
           name: s.name,
           color: s.color,
-          values: topLine(project(applyScenario(state, s), opts).points, mode),
+          values: topLine(project(applyScenario(state, s), opts, plannedBuys).points, mode),
         })),
-    [scenarios, state, opts, mode],
+    [scenarios, state, opts, mode, plannedBuys],
   )
 
   const endVal = mode === 'real' ? result.endReal : result.endNominal
@@ -107,8 +110,8 @@ export default function PlanningPage() {
   // active scenario's endpoint, for the comparison strip
   const activeDirty = isDirty(state, active)
   const activeResult = useMemo(
-    () => (activeDirty ? project(applyScenario(state, active), opts) : null),
-    [activeDirty, state, active, opts],
+    () => (activeDirty ? project(applyScenario(state, active), opts, plannedBuys) : null),
+    [activeDirty, state, active, opts, plannedBuys],
   )
   const scenarioEnd = activeResult ? (mode === 'real' ? activeResult.endReal : activeResult.endNominal) : null
 
