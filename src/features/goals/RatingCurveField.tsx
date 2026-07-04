@@ -5,7 +5,7 @@ import { Button, Segmented, Slider, Sparkline } from '@/ui'
 import { MAX_RATING } from './goal-meta'
 
 const firstRating = (v: GoalValue): number =>
-  v.type === 'flat' ? v.rating : (v.points[0]?.rating ?? 5)
+  v.type === 'flat' ? v.rating : (v.points[0]?.rating ?? 50)
 
 /** A tiny twin sparkline: your rating, and what distance leaves of it. */
 function CurvePreview({
@@ -63,7 +63,7 @@ export function RatingCurveField({
       type: 'periods',
       points: [
         { from: todayISO(), rating: value.rating },
-        { from: addMonthsISO(todayISO(), 6), rating: Math.max(0, value.rating - 3) },
+        { from: addMonthsISO(todayISO(), 6), rating: Math.max(0, value.rating - 30) },
       ],
     })
   }
@@ -87,12 +87,12 @@ export function RatingCurveField({
             onValueChange={(r) => onChange({ type: 'flat', rating: r })}
             min={0}
             max={MAX_RATING}
-            step={0.5}
+            step={1}
             aria-label="Rating"
             className="flex-1"
           />
-          <span className="w-10 text-right font-serif text-lg tabular text-ink">
-            {value.rating.toFixed(1).replace(/\.0$/, '')}
+          <span className="w-12 text-right font-serif text-lg tabular text-ink">
+            {value.rating.toFixed(0)}
           </span>
         </div>
       ) : (
@@ -116,19 +116,19 @@ export function RatingCurveField({
                 }}
                 min={0}
                 max={MAX_RATING}
-                step={0.5}
+                step={1}
                 aria-label="Rating for this period"
                 className="flex-1"
               />
-              <span className="w-7 text-right text-sm tabular text-muted">
-                {p.rating.toFixed(1).replace(/\.0$/, '')}
+              <span className="w-8 text-right text-sm tabular text-muted">
+                {p.rating.toFixed(0)}
               </span>
               <button
                 type="button"
                 aria-label="Remove period"
                 onClick={() => {
                   const points = value.points.filter((_, j) => j !== i)
-                  onChange({ type: 'periods', points: points.length ? points : [{ from: todayISO(), rating: 5 }] })
+                  onChange({ type: 'periods', points: points.length ? points : [{ from: todayISO(), rating: 50 }] })
                 }}
                 className="grid size-7 shrink-0 place-items-center rounded-lg text-faint transition-colors hover:bg-rust/10 hover:text-rust"
               >
@@ -143,7 +143,7 @@ export function RatingCurveField({
             onClick={() => {
               const last = value.points.at(-1)
               const from = last ? addMonthsISO(last.from, 6) : todayISO()
-              onChange({ type: 'periods', points: [...value.points, { from, rating: last?.rating ?? 5 }] })
+              onChange({ type: 'periods', points: [...value.points, { from, rating: last?.rating ?? 50 }] })
             }}
           >
             <Plus className="size-4" />

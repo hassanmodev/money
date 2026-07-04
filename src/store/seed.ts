@@ -141,12 +141,12 @@ export function createSeed(): FinanceState {
       o('tx-r7', 'expense', 'box-checking', 120, 'fun', '2026-05-16', 'Live show'),
     ],
     goals: [
-      g('goal-japan', 'Two weeks in Japan', 4800, 9, '#db8a82', 'The big one.'),
-      g('goal-laptop', 'New laptop', 1900, 6, '#8aa0c8'),
+      g('goal-japan', 'Two weeks in Japan', 4800, 90, '#db8a82', 'The big one.'),
+      g('goal-laptop', 'New laptop', 1900, 60, '#8aa0c8'),
       {
         // An umbrella: cheap, highly rated, and it lifts every other goal by
         // up to 15% once it lands.
-        ...g('goal-calm', 'A calmer routine', 1200, 8, '#b58ad0', 'Lifts everything else a little.'),
+        ...g('goal-calm', 'A calmer routine', 1200, 80, '#b58ad0', 'Lifts everything else a little.'),
         umbrella: { boost: 0.15 },
       },
       {
@@ -157,9 +157,9 @@ export function createSeed(): FinanceState {
         value: {
           type: 'periods',
           points: [
-            { from: '2026-06-01', rating: 7 },
-            { from: '2026-10-01', rating: 3 },
-            { from: '2027-05-01', rating: 7 },
+            { from: '2026-06-01', rating: 70 },
+            { from: '2026-10-01', rating: 30 },
+            { from: '2027-05-01', rating: 70 },
           ],
         },
         status: 'open',
@@ -167,17 +167,17 @@ export function createSeed(): FinanceState {
         createdAt: CREATED,
       },
       {
-        ...g('goal-desk', 'Standing desk', 520, 5, '#74b1a3'),
+        ...g('goal-desk', 'Standing desk', 520, 50, '#74b1a3'),
         status: 'done',
         doneDate: '2026-04-15',
       },
-      { ...g('goal-watch', 'Vintage watch', 3200, 4, '#cba24f', 'Maybe one day.'), status: 'dismissed' },
+      { ...g('goal-watch', 'Vintage watch', 3200, 40, '#cba24f', 'Maybe one day.'), status: 'dismissed' },
 
       // ── an alternative-set: three phones, one slot. The planner picks the
       // best — or, since the group allows it, buys cheap now and upgrades later.
-      { ...g('goal-phone-budget', 'Budget phone', 320, 5, '#7fb0c4'), groupId: 'grp-phone' },
-      { ...g('goal-phone-mid', 'Mid-range phone', 620, 7, '#7fb0c4'), groupId: 'grp-phone' },
-      { ...g('goal-phone-pro', 'Flagship phone', 1150, 9, '#7fb0c4', 'The one you really want.'), groupId: 'grp-phone' },
+      { ...g('goal-phone-budget', 'Budget phone', 320, 50, '#7fb0c4'), groupId: 'grp-phone' },
+      { ...g('goal-phone-mid', 'Mid-range phone', 620, 70, '#7fb0c4'), groupId: 'grp-phone' },
+      { ...g('goal-phone-pro', 'Flagship phone', 1150, 90, '#7fb0c4', 'The one you really want.'), groupId: 'grp-phone' },
     ],
     goalGroups: [
       {

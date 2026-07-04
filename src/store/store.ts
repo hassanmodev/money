@@ -8,6 +8,7 @@ import type {
   Goal,
   GoalGroup,
   GoalStatus,
+  GoalValue,
   Settings,
   Transaction,
 } from '@/domain'
@@ -61,6 +62,17 @@ interface Actions {
 export type Store = FinanceState & Actions
 
 const now = () => new Date().toISOString()
+
+const legacyRatingToHundred = (rating: number): number =>
+  rating >= 0 && rating <= 10 ? rating * 10 : rating
+
+const migrateGoalValueToHundred = (value: GoalValue): GoalValue =>
+  value.type === 'flat'
+    ? { ...value, rating: legacyRatingToHundred(value.rating) }
+    : {
+        ...value,
+        points: value.points.map((p) => ({ ...p, rating: legacyRatingToHundred(p.rating) })),
+      }
 
 export const useStore = create<Store>()(
   persist(
@@ -207,12 +219,13 @@ export const useStore = create<Store>()(
     }),
     {
       name: 'cozy-money/v1',
-      version: 4,
+      version: 5,
       // Older saves predate goals — fold in an empty list so the engine is safe.
       // v3 moved funding from per-goal `boxIds` onto a box `fundsGoals` flag:
       // any box a goal used to draw from joins the shared pool, and the now-dead
       // `boxIds` field is stripped off each goal.
       // v4 adds alternative-sets — seed an empty `goalGroups` list.
+      // v5 promotes goal ratings from a 0-10 scale to a 0-100 scale.
       migrate: (persisted, version) => {
         const s = persisted as Partial<FinanceState>
         if (version < 2 && !s.goals) s.goals = []
@@ -229,6 +242,12 @@ export const useStore = create<Store>()(
           })
         }
         if (version < 4 && !s.goalGroups) s.goalGroups = []
+        if (version < 5) {
+          s.goals = (s.goals ?? []).map((g) => ({
+            ...g,
+            value: migrateGoalValueToHundred(g.value),
+          }))
+        }
         return s as FinanceState
       },
       // persist only the data, never the action functions

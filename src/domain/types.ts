@@ -158,7 +158,7 @@ export type GoalStatus = 'open' | 'done' | 'dismissed'
 /** One step of a goal's worth over time: this rating holds from `from` onward. */
 export interface GoalRatingPoint {
   from: ISODate
-  rating: number // happiness per period, 0..10
+  rating: number // happiness per period, 0..100
 }
 
 /**

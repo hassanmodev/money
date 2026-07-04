@@ -24,7 +24,7 @@ const goal = (g: Partial<Goal>): Goal => ({
   id: `g${n++}`,
   name: 'Goal',
   cost: 100,
-  value: { type: 'flat', rating: 5 },
+  value: { type: 'flat', rating: 50 },
   status: 'open',
   color: '#9eb87f',
   createdAt: '2026-01-01T00:00:00Z',
@@ -73,10 +73,21 @@ describe('RatingCurve', () => {
 
 describe('goalHappiness', () => {
   it('rewards achieving sooner', () => {
-    const g = goal({ value: { type: 'flat', rating: 7 } })
+    const g = goal({ value: { type: 'flat', rating: 70 } })
     const soon = goalHappiness(g, NOW, opts)
     const later = goalHappiness(g, '2027-01-01', opts)
     expect(soon).toBeGreaterThan(later)
+  })
+
+  it('discounts later buys from today, not from the buy date', () => {
+    const g = goal({ value: { type: 'flat', rating: 100 } })
+    const lambda = Math.LN2 / 2
+    const boughtAfterTwoYears = goalHappiness(g, '2028-01-01', opts)
+    const resetAtBuyDate = (100 * (1 - Math.exp(-lambda * 2))) / lambda
+    const absoluteFromToday = (100 * (Math.exp(-lambda * 2) - Math.exp(-lambda * 4))) / lambda
+
+    expect(boughtAfterTwoYears).toBeCloseTo(absoluteFromToday, 0)
+    expect(boughtAfterTwoYears).toBeLessThan(resetAtBuyDate)
   })
 })
 
@@ -101,7 +112,7 @@ describe('umbrella goals (the happiness multiplier)', () => {
       flat,
       (g) => g.doneDate,
     )
-    expect(umbrellaMultiplierAt(maxed, 1)).toBeCloseTo(1.5, 6) // 1 + 0.5 × (10/10)
+    expect(umbrellaMultiplierAt(maxed, 1)).toBeCloseTo(1.5, 6) // 1 + 0.5 × (100/100)
     expect(umbrellaMultiplierAt(off, 1)).toBeCloseTo(1, 6) // 1 + 0.5 × 0
   })
 

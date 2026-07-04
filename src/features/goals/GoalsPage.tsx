@@ -64,13 +64,13 @@ export default function GoalsPage() {
   // The time cursor — "what's happened by when". The plan itself is anchored at
   // the real today (useCommittedPlan), so scrubbing the cursor reveals which buys
   // have already happened rather than re-planning from the cursor.
-  const now = useViewDate()
   const today = todayISO()
-  const horizon = addMonthsISO(now, HORIZON_MONTHS)
+  const now = useViewDate()
+  const horizon = addMonthsISO(today, HORIZON_MONTHS)
   const halfLifeMonths = settings.happinessHalfLifeMonths ?? 24
   const opts: HappinessOptions = useMemo(
-    () => ({ now, horizon, halfLifeMonths }),
-    [now, horizon, halfLifeMonths],
+    () => ({ now: today, horizon, halfLifeMonths }),
+    [today, horizon, halfLifeMonths],
   )
 
   // The budget isn't typed in — it's the live value of the goal-funding pool.
@@ -348,7 +348,7 @@ export default function GoalsPage() {
             {chartMode === 'banked' ? 'Nothing achieved yet.' : 'The plan is empty — mark a box “Funds goals”, or add goals.'}
           </div>
         ) : (
-          <HappinessChart tracks={tracks} now={now} horizon={horizon} halfLifeMonths={halfLifeMonths} />
+          <HappinessChart tracks={tracks} now={today} horizon={horizon} halfLifeMonths={halfLifeMonths} />
         )}
 
         <p className="mt-2 text-xs text-faint">

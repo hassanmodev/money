@@ -6,6 +6,8 @@
  * a **distance discount** so sooner-and-nearer happiness outweighs distant
  * happiness — planning too far ahead is worth less. Total happiness is the area
  * under `rating × discount`, from the day you achieve the goal to the horizon.
+ * The discount's clock is always the planning anchor ("today"), not the buy
+ * date, so a goal bought two years out starts with two years of distance decay.
  *
  * With a limited budget you can't have everything, so {@link planGoals} picks
  * greedily by happiness-per-cost — the classic knapsack heuristic — until the
@@ -30,11 +32,11 @@ export const DEFAULT_UPGRADE_LOSS = 0.15
  * umbrella's own rating into the fraction of its boost that actually lands.
  * Mirrors the UI's `MAX_RATING`; kept here so the domain stays import-free.
  */
-export const RATING_MAX = 10
+export const RATING_MAX = 100
 
 /** How the goal planner reads "now", "how far to look", and "how steep". */
 export interface HappinessOptions {
-  /** the planning anchor — distance is measured from here */
+  /** the planning anchor — distance is measured from here, even for later buys */
   now: ISODate
   /** how far ahead happiness is counted */
   horizon: ISODate

@@ -56,7 +56,7 @@ export function GoalEditor({
 
   const [name, setName] = useState('')
   const [costStr, setCostStr] = useState('')
-  const [value, setValue] = useState<GoalValue>({ type: 'flat', rating: 5 })
+  const [value, setValue] = useState<GoalValue>({ type: 'flat', rating: 50 })
   const [umbrella, setUmbrella] = useState(false)
   const [boostPct, setBoostPct] = useState(15)
   // Alternative-group membership + the group's upgrade settings.
@@ -74,7 +74,7 @@ export function GoalEditor({
     if (!open) return
     setName(goal?.name ?? '')
     setCostStr(goal?.cost != null ? String(goal.cost) : '')
-    setValue(goal?.value ?? { type: 'flat', rating: 5 })
+    setValue(goal?.value ?? { type: 'flat', rating: 50 })
     setUmbrella(!!goal?.umbrella)
     setBoostPct(goal?.umbrella ? Math.round(goal.umbrella.boost * 100) : 15)
     const grp = goal?.groupId ? goalGroups.find((g) => g.id === goal.groupId) : undefined

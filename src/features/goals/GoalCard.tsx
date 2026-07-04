@@ -3,9 +3,8 @@ import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { RatingCurve, distanceWeight, type Goal, type GoalGroup } from '@/domain'
 import { cn } from '@/lib/cn'
-import { fmtDate } from '@/lib/date'
+import { fmtDate, todayISO } from '@/lib/date'
 import { hexToRgba } from '@/lib/palette'
-import { useViewDate } from '@/store/time'
 import { useStore } from '@/store/store'
 import { Button, Card, Chip, ConfirmDialog, Menu, MenuItem, Money, Sparkline } from '@/ui'
 import { MAX_RATING, STATUS_META } from './goal-meta'
@@ -39,14 +38,14 @@ export function GoalCard({
 }) {
   const setGoalStatus = useStore((s) => s.setGoalStatus)
   const removeGoal = useStore((s) => s.removeGoal)
-  const now = useViewDate()
+  const today = todayISO()
   const [confirm, setConfirm] = useState(false)
 
   // A goal reads as achieved if it really is, or if a committed buy has happened.
   const achievedDate = goal.status === 'done' && goal.doneDate ? goal.doneDate : achievedOn
   const meta = achievedDate ? STATUS_META.done : STATUS_META[goal.status]
   const StatusIcon = meta.icon
-  const ratingLabel = goal.value.type === 'flat' ? `${goal.value.rating}` : 'varies'
+  const ratingLabel = goal.value.type === 'flat' ? `${Math.round(goal.value.rating)}` : 'varies'
   const dimmed = goal.status === 'dismissed'
 
   return (
@@ -65,10 +64,10 @@ export function GoalCard({
         <header className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-3">
             <div
-              className="grid size-10 shrink-0 place-items-center rounded-xl font-serif text-lg"
+              className="grid size-10 shrink-0 place-items-center rounded-xl font-serif text-base"
               style={{ backgroundColor: hexToRgba(goal.color, 0.14), color: goal.color }}
             >
-              {goal.value.type === 'flat' ? goal.value.rating : '~'}
+              {goal.value.type === 'flat' ? Math.round(goal.value.rating) : '~'}
             </div>
             <div className="min-w-0 leading-tight">
               <div className="truncate font-medium text-ink">{goal.name}</div>
@@ -121,7 +120,7 @@ export function GoalCard({
           </div>
         </div>
 
-        <Sparkline data={ratingSeries(goal, halfLifeMonths, now)} color={goal.color} width={320} height={32} className="w-full" />
+        <Sparkline data={ratingSeries(goal, halfLifeMonths, today)} color={goal.color} width={320} height={32} className="w-full" />
 
         <div className="mt-auto flex min-h-[1.625rem] flex-wrap items-center gap-1.5">
           {badge}
