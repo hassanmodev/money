@@ -25,6 +25,7 @@ interface Actions {
   addBox: (box: NewBox) => string
   updateBox: (id: string, patch: Partial<Box>) => void
   removeBox: (id: string) => void
+  reorderBoxes: (orderedActiveIds: string[]) => void
 
   upsertEffect: (boxId: string, effect: Effect) => void
   removeEffect: (boxId: string, effectId: string) => void
@@ -83,6 +84,20 @@ export const useStore = create<Store>()(
             (t) => t.boxId !== id && t.toBoxId !== id,
           ),
         })),
+      reorderBoxes: (orderedActiveIds) =>
+        set((s) => {
+          const activeOrder = new Map(orderedActiveIds.map((id, i) => [id, i]))
+          const active = [...s.boxes]
+            .filter((b) => !b.archived && activeOrder.has(b.id))
+            .sort((a, b) => activeOrder.get(a.id)! - activeOrder.get(b.id)!)
+
+          let nextActive = 0
+          return {
+            boxes: s.boxes.map((b) =>
+              !b.archived && activeOrder.has(b.id) ? active[nextActive++] : b,
+            ),
+          }
+        }),
 
       upsertEffect: (boxId, effect) =>
         set((s) => ({
