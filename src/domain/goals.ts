@@ -538,6 +538,15 @@ export function planGoalsScheduled(goals: Goal[], opts: ScheduleOptions): Schedu
     }
     children.sort((a, b) => b.happiness - a.happiness)
     beam = children.slice(0, beamWidth)
+    // A dense goal placed on a fine grid spawns one child per date, which can
+    // flood the beam and evict every state that skips it — locking siblings out
+    // of their one-shot purchase and forcing them down the upgrade route. Keep
+    // the best "drop" child alive so that alternative stays explorable.
+    const isDrop = (s: State) => s.decisions[s.decisions.length - 1] === -1
+    if (!beam.some(isDrop)) {
+      const bestDrop = children.find(isDrop)
+      if (bestDrop) beam[beam.length - 1] = bestDrop
+    }
   }
 
   const best = beam[0] ?? { decisions: scored.map(() => -1), commits: [], sources: doneUmbrellas, happiness: 0 }

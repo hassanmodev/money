@@ -388,6 +388,33 @@ describe('alternative groups & upgrade paths', () => {
     expect(plan.dropped.some((d) => d.reason === 'alternative')).toBe(true)
   })
 
+  it('one-shots the premium option when the pot already covers it, instead of upgrading', () => {
+    // A fine monthly grid used to flood the beam with placements of the denser
+    // cheap option, evicting the skip-it state — so the premium could only ever
+    // enter as an upgrade, even when buying it outright today was affordable,
+    // happier, and cheaper overall.
+    const months = Array.from({ length: 25 }, (_, i) => {
+      const d = new Date(Date.UTC(2026, i, 1))
+      return d.toISOString().slice(0, 10)
+    })
+    const o: ScheduleOptions = {
+      now: NOW,
+      horizon: '2028-01-01',
+      halfLifeMonths: 12,
+      grid: months,
+      budgetCurve: months.map((_, i) => 4900 + i * 50),
+      groups: [group({ upgradable: true })],
+    }
+    const modest = goal({ id: 'modest', cost: 2500, value: { type: 'flat', rating: 6 }, groupId: 'grp' })
+    const better = goal({ id: 'better', cost: 3700, value: { type: 'flat', rating: 6.5 }, groupId: 'grp' })
+    const plan = planGoalsScheduled([modest, better], o)
+
+    expect(plan.scheduled.map((s) => s.goal.id)).toEqual(['better'])
+    expect(plan.scheduled[0].achieveDate).toBe(NOW)
+    expect(plan.scheduled[0].upgradeFrom).toBeUndefined()
+    expect(plan.dropped.map((d) => [d.goal.id, d.reason])).toEqual([['modest', 'alternative']])
+  })
+
   it('defaults the upgrade loss when a group leaves it unset', () => {
     const o: ScheduleOptions = {
       ...flat(),
