@@ -12,6 +12,9 @@ import { RhythmControl } from './RhythmControl'
 export interface ComposerPrefill {
   kind?: TxKind
   boxId?: string
+  toBoxId?: string
+  category?: string
+  note?: string
 }
 
 const KIND_OPTIONS: { value: TxKind; label: string }[] = [
@@ -94,13 +97,17 @@ export function AddTransaction({
       return
     }
     const first = prefill.boxId ?? boxes[0]?.id ?? ''
-    const second = boxes.find((b) => b.id !== first)?.id ?? ''
+    const prefilledTo =
+      prefill.toBoxId && prefill.toBoxId !== first
+        ? prefill.toBoxId
+        : undefined
+    const second = prefilledTo ?? boxes.find((b) => b.id !== first)?.id ?? ''
     setKind(prefill.kind ?? 'expense')
     setBoxId(first)
     setToBoxId(second)
     setAmountStr('')
-    setCategory('groceries')
-    setNote('')
+    setCategory(prefill.category ?? 'groceries')
+    setNote(prefill.note ?? '')
     setDate(todayISO())
     setRecurrence(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
