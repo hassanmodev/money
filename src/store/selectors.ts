@@ -90,27 +90,39 @@ export function useCommittedPlan(): ScheduledPlan {
   return useScheduledPlan(opts)
 }
 
+export function useGoalAutoApply(): boolean {
+  return useStore((s) => s.settings.goalAutoApply ?? true)
+}
+
+/** Convert the committed schedule into the synthetic buys shared by the app. */
+export function plannedBuysFromPlan(plan: ScheduledPlan, today: string): PlannedBuy[] {
+  return plan.scheduled
+    .filter((s) => s.achieveDate >= today)
+    .map((s) => ({
+      id: s.goal.id,
+      label: s.goal.name,
+      date: s.achieveDate,
+      cost: s.cost,
+      color: s.goal.color,
+      createdAt: s.goal.createdAt,
+    }))
+}
+
+/** The committed plan's buys from today onward, before the auto-apply setting. */
+export function useCommittedPlannedBuys(): PlannedBuy[] {
+  const plan = useCommittedPlan()
+  const today = todayISO()
+  return useMemo(() => plannedBuysFromPlan(plan, today), [plan, today])
+}
+
 /**
- * The committed plan's *future* buys, forecast as money leaving the model. Only
- * buys dated strictly after today are returned: the present always shows your
- * actual money, and the plan auto-executes *in the future*. Past the cursor each
- * one reads as a done, money-out purchase (see the goals page and activity feed).
+ * The committed plan buys currently applied to balances. With auto-apply off,
+ * scheduled goals remain advisory and do not become synthetic expenses.
  */
 export function usePlannedBuys(): PlannedBuy[] {
-  const plan = useCommittedPlan()
-  return useMemo(() => {
-    const today = todayISO()
-    return plan.scheduled
-      .filter((s) => s.achieveDate > today) // future only — never auto-spends "now"
-      .map((s) => ({
-        id: s.goal.id,
-        label: s.goal.name,
-        date: s.achieveDate,
-        cost: s.cost,
-        color: s.goal.color,
-        createdAt: s.goal.createdAt,
-      }))
-  }, [plan])
+  const autoApply = useGoalAutoApply()
+  const buys = useCommittedPlannedBuys()
+  return useMemo(() => (autoApply ? buys : []), [autoApply, buys])
 }
 
 /** The planner's budget: live base value of the boxes funding open goals. */
@@ -158,6 +170,23 @@ export function useNetWorth(dateISO?: string): number {
   const view = useNow()
   const date = dateISO ?? view
   const planned = usePlannedBuys()
+  return useMemo(() => netWorthAt(state, date, planned), [state, date, planned])
+}
+
+/** Net worth without scheduled goal auto-buys, while still counting manual achieved goals. */
+export function useNetWorthWithoutPlannedGoals(dateISO?: string): number {
+  const state = useFinanceState()
+  const view = useNow()
+  const date = dateISO ?? view
+  return useMemo(() => netWorthAt(state, date), [state, date])
+}
+
+/** Net worth with the committed scheduled goal buys, regardless of the auto-apply toggle. */
+export function useNetWorthWithPlannedGoals(dateISO?: string): number {
+  const state = useFinanceState()
+  const view = useNow()
+  const date = dateISO ?? view
+  const planned = useCommittedPlannedBuys()
   return useMemo(() => netWorthAt(state, date, planned), [state, date, planned])
 }
 

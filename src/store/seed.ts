@@ -10,6 +10,7 @@ export function createEmpty(): FinanceState {
       baseCurrency: 'EUR',
       rates: { EUR: 1 },
       inflation: 0,
+      goalAutoApply: true,
     },
     boxes: [],
     transactions: [],
@@ -27,6 +28,7 @@ export function createSeed(): FinanceState {
       rates: { EUR: 1, USD: 0.92, GBP: 1.17, CHF: 1.04, BTC: 92000, XAU: 2400 },
       inflation: 0.025,
       happinessHalfLifeMonths: 24,
+      goalAutoApply: true,
     },
     boxes: [
       {

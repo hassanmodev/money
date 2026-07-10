@@ -24,6 +24,7 @@ export function GoalCard({
   happiness,
   badge,
   achievedOn,
+  autoAchieved,
   onEdit,
 }: {
   goal: Goal
@@ -34,6 +35,7 @@ export function GoalCard({
   /** the date this goal has *happened* by — a real doneDate, or the committed
    *  plan's buy date once the time cursor has passed it. Shown as achieved. */
   achievedOn?: string
+  autoAchieved?: boolean
   onEdit: () => void
 }) {
   const setGoalStatus = useStore((s) => s.setGoalStatus)
@@ -43,6 +45,7 @@ export function GoalCard({
 
   // A goal reads as achieved if it really is, or if a committed buy has happened.
   const achievedDate = goal.status === 'done' && goal.doneDate ? goal.doneDate : achievedOn
+  const isAutoAchieved = !!achievedOn && goal.status !== 'done' && autoAchieved
   const meta = achievedDate ? STATUS_META.done : STATUS_META[goal.status]
   const StatusIcon = meta.icon
   const ratingLabel = goal.value.type === 'flat' ? `${Math.round(goal.value.rating)}` : 'varies'
@@ -73,7 +76,7 @@ export function GoalCard({
               <div className="truncate font-medium text-ink">{goal.name}</div>
               <div className="flex items-center gap-1 text-xs text-faint">
                 <StatusIcon className={cn('size-3', meta.tone)} />
-                {achievedDate ? fmtDate(achievedDate) : meta.label}
+                {achievedDate ? `${isAutoAchieved ? 'Auto · ' : ''}${fmtDate(achievedDate)}` : meta.label}
               </div>
             </div>
           </div>

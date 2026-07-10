@@ -1,12 +1,20 @@
-import { ArrowUpRight } from 'lucide-react'
+import { ArrowUpRight, Target } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Page } from '@/components/Page'
 import { addYearsISO } from '@/lib/date'
 import { fmtSignedPercent } from '@/lib/format'
-import { useActiveBoxes, useBoxValue, useNetWorth, useProjection } from '@/store/selectors'
+import {
+  useActiveBoxes,
+  useBoxValue,
+  useGoalAutoApply,
+  useNetWorthWithPlannedGoals,
+  useNetWorthWithoutPlannedGoals,
+  useProjection,
+} from '@/store/selectors'
+import { useStore } from '@/store/store'
 import { useViewDate } from '@/store/time'
 import type { Box } from '@/domain'
-import { Card, Money, Sparkline } from '@/ui'
+import { Card, Money, Sparkline, Switch } from '@/ui'
 import { boxIcon, KIND_LABEL } from '@/ui/icons'
 import { ActivityList } from '@/features/transactions/ActivityList'
 
@@ -19,18 +27,51 @@ function greeting() {
 }
 
 function Hero() {
-  const net = useNetWorth()
+  const fullNet = useNetWorthWithoutPlannedGoals()
+  const goalNet = useNetWorthWithPlannedGoals()
+  const autoApply = useGoalAutoApply()
+  const updateSettings = useStore((s) => s.updateSettings)
   const from = useViewDate()
   const proj = useProjection({ from, to: addYearsISO(from, 5), steps: 60 })
   const series = proj.points.map((p) => p.nominal)
-  const growth = net > 0 ? proj.endNominal / net - 1 : 0
+  const growth = fullNet > 0 ? proj.endNominal / fullNet - 1 : 0
+  const goalDelta = goalNet - fullNet
 
   return (
     <Card className="relative overflow-hidden">
       <div className="relative z-10 px-6 pb-24 pt-7 md:px-8 md:pt-8">
-        <div className="text-sm text-muted">{greeting()}.</div>
-        <div className="mt-5 text-[11px] uppercase tracking-[0.12em] text-faint">Net worth</div>
-        <Money amount={net} animate className="font-serif text-5xl text-ink md:text-6xl" />
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <div className="text-sm text-muted">{greeting()}.</div>
+            <div className="mt-5 text-[11px] uppercase tracking-[0.12em] text-faint">Full net worth</div>
+            <Money amount={fullNet} animate className="font-serif text-5xl text-ink md:text-6xl" />
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+              <span>with planned goals</span>
+              <Money amount={goalNet} compact className="font-medium tabular text-ink" />
+              <Money
+                amount={goalDelta}
+                compact
+                sign
+                className={goalDelta < 0 ? 'tabular text-rust' : 'tabular text-sage'}
+              />
+            </div>
+          </div>
+
+          <label className="flex shrink-0 cursor-pointer items-center gap-3 rounded-xl border border-line bg-raised/45 px-3 py-2.5">
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-sage/15 text-sage">
+              <Target className="size-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-xs font-medium text-ink">Auto-apply goals</span>
+              <span className="block text-[11px] text-faint">{autoApply ? 'On' : 'Paused'}</span>
+            </span>
+            <Switch
+              checked={autoApply}
+              onCheckedChange={(goalAutoApply) => updateSettings({ goalAutoApply })}
+              aria-label="Auto-apply goals"
+            />
+          </label>
+        </div>
         <div className="mt-3 flex items-center gap-2 text-sm text-muted">
           <span className="inline-flex items-center gap-1 text-sage">
             <ArrowUpRight className="size-4" />

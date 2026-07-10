@@ -232,6 +232,8 @@ export interface Settings {
   inflation?: number
   /** sooner counts more: a goal's worth halves every this-many months further out */
   happinessHalfLifeMonths?: number
+  /** whether scheduled goal buys automatically deduct from balances once reached */
+  goalAutoApply?: boolean
   /**
    * User edits to the currency catalogue: brand-new custom currencies *and*
    * overrides of built-in ones (matched by `code`). Merged over the JSON
