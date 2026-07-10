@@ -10,6 +10,7 @@ export interface GoalStackItem {
   badge?: ReactNode
   /** date the goal has happened by (real or a passed committed buy) — shown achieved */
   achievedOn?: string
+  autoAchieved?: boolean
 }
 
 /** Rest: each card behind peeks up by this much, building the deck's edge. */
@@ -65,7 +66,16 @@ export function GoalStack({
     const it = items[0]
     return (
       <motion.div className="h-full" {...entrance}>
-        <GoalCard goal={it.goal} group={group} halfLifeMonths={halfLifeMonths} happiness={it.happiness} badge={it.badge} achievedOn={it.achievedOn} onEdit={() => onEdit(it.goal)} />
+        <GoalCard
+          goal={it.goal}
+          group={group}
+          halfLifeMonths={halfLifeMonths}
+          happiness={it.happiness}
+          badge={it.badge}
+          achievedOn={it.achievedOn}
+          autoAchieved={it.autoAchieved}
+          onEdit={() => onEdit(it.goal)}
+        />
       </motion.div>
     )
   }
@@ -120,6 +130,7 @@ export function GoalStack({
             happiness={it.happiness}
             badge={it.badge}
             achievedOn={it.achievedOn}
+            autoAchieved={it.autoAchieved}
             onEdit={() => onEdit(it.goal)}
           />
         </motion.div>

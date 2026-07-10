@@ -6,7 +6,7 @@ import { goalHappiness, umbrellaSources, type Goal, type GoalStatus, type Happin
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
 import { addMonthsISO, fmtMonthYear, todayISO } from '@/lib/date'
-import { useActiveBoxes, useBankedHappiness, useCommittedPlan, useGoalBudget, useGoalFundingBoxes, useGoalGroups, useGoals } from '@/store/selectors'
+import { useActiveBoxes, useBankedHappiness, useCommittedPlan, useGoalAutoApply, useGoalBudget, useGoalFundingBoxes, useGoalGroups, useGoals } from '@/store/selectors'
 import { useViewDate } from '@/store/time'
 import { useStore } from '@/store/store'
 import { Button, Card, Chip, Money, Segmented } from '@/ui'
@@ -18,7 +18,9 @@ import { STATUS_META, STATUS_ORDER } from './goal-meta'
 
 const HORIZON_MONTHS = 48
 const HALF_LIFE_PRESETS = [
-  { value: '12', label: 'Now' },
+  { value: '3', label: 'Now' },
+  { value: '6', label: 'Medium term' },
+  { value: '12', label: 'Short term' },
   { value: '24', label: 'Balanced' },
   { value: '48', label: 'Long view' },
 ]
@@ -58,6 +60,7 @@ export default function GoalsPage() {
   const settings = useStore((s) => s.settings)
   const updateSettings = useStore((s) => s.updateSettings)
   const setGoalStatus = useStore((s) => s.setGoalStatus)
+  const autoApply = useGoalAutoApply()
   const boxes = useActiveBoxes()
   const groupById = useMemo(() => new Map(goalGroups.map((g) => [g.id, g])), [goalGroups])
 
@@ -91,13 +94,13 @@ export default function GoalsPage() {
   )
 
   // The date a goal has actually *happened* by the cursor: its real achieved
-  // date, or — once the cursor passes it — the committed plan's buy date. Money
-  // is already out by then, so the goal reads as done. ("Now" buys aren't
-  // auto-committed: only genuinely future buys flip when the cursor reaches them.)
+  // date, or — once the cursor reaches it — the committed plan's buy date. Money
+  // is already out by then, so the goal reads as done.
   const happenedDate = (g: Goal): string | undefined => {
     if (g.status === 'done' && g.doneDate) return g.doneDate
+    if (!autoApply) return undefined
     const s = scheduledById.get(g.id)
-    return s && s.achieveDate > today && s.achieveDate <= now ? s.achieveDate : undefined
+    return s && s.achieveDate <= now ? s.achieveDate : undefined
   }
   const effStatus = (g: Goal): GoalStatus =>
     g.status === 'dismissed' ? 'dismissed' : happenedDate(g) ? 'done' : 'open'
@@ -112,17 +115,23 @@ export default function GoalsPage() {
     [goals, opts, scheduledById],
   )
   // "Now" if it lands today, else the month it lands in.
-  const whenLabel = (achieveDate: string) => (achieveDate <= now ? 'Now' : fmtMonthYear(achieveDate))
+  const whenLabel = (achieveDate: string) => (achieveDate <= today ? 'Now' : fmtMonthYear(achieveDate))
 
   // A goal's card worth + status badge — shared by standalone cards and stacks.
   const cardOf = (g: Goal) => {
     const happened = happenedDate(g)
+    const autoHappened = !!happened && g.status !== 'done'
     const achieveDate = happened ?? now
     const happiness = goalHappiness(g, achieveDate, opts, cardUmbrellas)
     const scheduled = scheduledById.get(g.id)
     const dropped = droppedById.get(g.id)
     const badge =
-      effStatus(g) === 'open' ? (
+      autoHappened ? (
+        <Chip className="gap-1 border-sage/40 text-sage">
+          <Sparkles className="size-3" />
+          Auto-applied
+        </Chip>
+      ) : effStatus(g) === 'open' ? (
         scheduled ? (
           <Chip className="gap-1 border-sage/40 text-sage">
             <Sparkles className="size-3" />
@@ -135,7 +144,7 @@ export default function GoalsPage() {
           <Chip className="text-faint">Won’t fit</Chip>
         )
       ) : undefined
-    return { happiness, badge, achievedOn: happened }
+    return { happiness, badge, achievedOn: happened, autoAchieved: autoHappened }
   }
 
   const [chartMode, setChartMode] = useState<'banked' | 'plan'>('plan')
@@ -283,6 +292,7 @@ export default function GoalsPage() {
               // Once the cursor passes a buy's date it has happened — show it as
               // done, and there's nothing left to "achieve".
               const happened = happenedDate(s.goal)
+              const autoHappened = !!happened && s.goal.status !== 'done'
               return (
                 <PlanRow
                   key={s.goal.id}
@@ -292,7 +302,7 @@ export default function GoalsPage() {
                   happiness={s.happiness}
                   density={s.density}
                   maxDensity={maxDensity}
-                  when={happened ? 'Done' : whenLabel(s.achieveDate)}
+                  when={happened ? (autoHappened ? 'Auto' : 'Done') : whenLabel(s.achieveDate)}
                   upgradeFromName={
                     s.upgradeFrom ? plan.scheduled.find((x) => x.goal.id === s.upgradeFrom)?.goal.name : undefined
                   }
@@ -404,10 +414,18 @@ export default function GoalsPage() {
                       />,
                     )
                   } else {
-                    const { happiness, badge, achievedOn } = cardOf(g)
+                    const { happiness, badge, achievedOn, autoAchieved } = cardOf(g)
                     cells.push(
                       <motion.div key={g.id} className="h-full" {...entrance}>
-                        <GoalCard goal={g} halfLifeMonths={halfLifeMonths} happiness={happiness} badge={badge} achievedOn={achievedOn} onEdit={() => openEdit(g)} />
+                        <GoalCard
+                          goal={g}
+                          halfLifeMonths={halfLifeMonths}
+                          happiness={happiness}
+                          badge={badge}
+                          achievedOn={achievedOn}
+                          autoAchieved={autoAchieved}
+                          onEdit={() => openEdit(g)}
+                        />
                       </motion.div>,
                     )
                   }
@@ -456,6 +474,7 @@ function PlanRow({
   onAchieve?: () => void
 }) {
   const width = maxDensity > 0 && Number.isFinite(density) ? Math.max(4, (density / maxDensity) * 100) : 100
+  const whenClass = when === 'Now' || when === 'Auto' ? 'bg-sage/15 text-sage' : 'bg-raised text-muted'
   return (
     <div className={`group flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-raised/50 ${dimmed ? 'opacity-55' : ''}`}>
       <div className="grid size-6 shrink-0 place-items-center rounded-md bg-sunken/60 text-xs tabular text-faint">
@@ -473,7 +492,7 @@ function PlanRow({
               </span>
             )}
             {when && (
-              <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${when === 'Now' ? 'bg-sage/15 text-sage' : 'bg-raised text-muted'}`}>
+              <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${whenClass}`}>
                 {when}
               </span>
             )}

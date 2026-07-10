@@ -112,6 +112,7 @@ function AchievedRow({
   cost,
   date,
   baseCurrency,
+  auto,
 }: {
   goalId: string
   name: string
@@ -119,6 +120,7 @@ function AchievedRow({
   cost: number
   date: string
   baseCurrency: string
+  auto?: boolean
 }) {
   const navigate = useNavigate()
   const open = () => navigate(`/goals?edit=${goalId}`)
@@ -148,10 +150,10 @@ function AchievedRow({
           <span className="truncate text-sm text-ink">{name}</span>
           <Chip className="gap-1 px-2 py-0.5 text-[10px]">
             <Target className="size-2.5" />
-            Goal
+            {auto ? 'Auto' : 'Goal'}
           </Chip>
         </div>
-        <div className="truncate text-xs text-faint">Goal achieved</div>
+        <div className="truncate text-xs text-faint">{auto ? 'Auto-applied goal' : 'Goal achieved'}</div>
       </div>
 
       <div className="text-right">
@@ -305,6 +307,7 @@ export function ActivityList({ limit, boxId }: { limit?: number; boxId?: string 
                   cost={it.buy.cost}
                   date={it.buy.date}
                   baseCurrency={baseCurrency}
+                  auto
                 />
               ),
             )}
