@@ -132,6 +132,8 @@ export interface Recurrence {
   unit: RecurrenceUnit
   anchor: ISODate // the first occurrence
   end: RecurrenceEnd
+  /** Spread each recurrence amount evenly across its calendar days. */
+  dailyAccrual?: boolean
 }
 
 export type TxKind = 'expense' | 'income' | 'transfer'

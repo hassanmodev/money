@@ -15,7 +15,7 @@ import { format, parseISO } from 'date-fns'
 import { realDiscount } from './effects'
 import { FlowNetwork } from './flow'
 import { toBase, convert } from './money'
-import { occurrencesBetween } from './recurrence'
+import { recurrenceAmountsBetween } from './recurrence'
 import type {
   Box,
   CurrencyCode,
@@ -95,17 +95,17 @@ interface Occurrence {
 
 /** Expand one transaction into concrete dated occurrences within [from, to]. */
 function expand(tx: Transaction, from: ISODate, to: ISODate): Occurrence[] {
-  const dates = tx.recurrence
-    ? occurrencesBetween(tx.recurrence, from, to)
+  const amounts = tx.recurrence
+    ? recurrenceAmountsBetween(tx.recurrence, tx.amount, from, to)
     : tx.date >= from && tx.date <= to
-      ? [tx.date]
+      ? [{ date: tx.date, amount: tx.amount }]
       : []
-  return dates.map((date) => ({
+  return amounts.map(({ date, amount }) => ({
     t: parseISO(date).getTime(),
     kind: tx.kind,
     boxId: tx.boxId,
     toBoxId: tx.toBoxId,
-    amount: tx.amount,
+    amount,
     currency: tx.currency,
   }))
 }

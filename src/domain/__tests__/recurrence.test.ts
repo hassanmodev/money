@@ -4,6 +4,7 @@ import {
   describeRecurrence,
   nextOccurrences,
   occurrencesBetween,
+  recurrenceAmountsBetween,
 } from '../recurrence'
 import type { Recurrence } from '../types'
 
@@ -59,6 +60,39 @@ describe('nextOccurrences', () => {
   it('returns the next n dates on or after a point', () => {
     const out = nextOccurrences(rec({}), 3, '2026-02-20')
     expect(out).toEqual(['2026-03-15', '2026-04-15', '2026-05-15'])
+  })
+})
+
+describe('recurrenceAmountsBetween', () => {
+  it('spreads a weekly amount evenly across each day', () => {
+    const out = recurrenceAmountsBetween(
+      rec({ unit: 'week', anchor: '2026-01-01', dailyAccrual: true }),
+      70,
+      '2026-01-01',
+      '2026-01-07',
+    )
+    expect(out).toHaveLength(7)
+    expect(out.every((entry) => entry.amount === 10)).toBe(true)
+  })
+
+  it('uses the actual number of calendar days in a monthly period', () => {
+    const out = recurrenceAmountsBetween(
+      rec({ anchor: '2026-02-01', dailyAccrual: true }),
+      280,
+      '2026-02-01',
+      '2026-02-28',
+    )
+    expect(out).toHaveLength(28)
+    expect(out.reduce((sum, entry) => sum + entry.amount, 0)).toBeCloseTo(280, 10)
+  })
+
+  it('preserves lump-sum occurrences when daily accrual is off', () => {
+    const out = recurrenceAmountsBetween(rec({}), 100, '2026-01-01', '2026-03-31')
+    expect(out).toEqual([
+      { date: '2026-01-15', amount: 100 },
+      { date: '2026-02-15', amount: 100 },
+      { date: '2026-03-15', amount: 100 },
+    ])
   })
 })
 

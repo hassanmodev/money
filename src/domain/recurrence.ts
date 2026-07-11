@@ -4,6 +4,7 @@ import {
   addMonths,
   addWeeks,
   addYears,
+  differenceInCalendarDays,
   format,
   isAfter,
   isBefore,
@@ -27,6 +28,11 @@ function step(date: Date, every: number, unit: RecurrenceUnit): Date {
 }
 
 const SAFETY_LIMIT = 200_000
+
+export interface RecurrenceAmount {
+  date: ISODate
+  amount: number
+}
 
 /**
  * All occurrence dates of `rec` that fall within [from, to] inclusive.
@@ -53,6 +59,53 @@ export function occurrencesBetween(
     if (!isBefore(d, fromD)) out.push(toISO(d)) // d >= from
     d = step(d, every, rec.unit)
   }
+  return out
+}
+
+/**
+ * Dated amounts for a recurrence within [from, to]. Normally each occurrence
+ * carries the full amount. With daily accrual, each recurrence period is split
+ * evenly across its actual calendar days, preserving the entered amount over a
+ * complete period (including variable-length months and leap years).
+ */
+export function recurrenceAmountsBetween(
+  rec: Recurrence,
+  amount: number,
+  from: ISODate,
+  to: ISODate,
+): RecurrenceAmount[] {
+  if (!rec.dailyAccrual || rec.unit === 'day') {
+    return occurrencesBetween(rec, from, to).map((date) => ({ date, amount }))
+  }
+
+  const fromD = parseISO(from)
+  const toD = parseISO(to)
+  const hardEnd = rec.end.type === 'on' ? parseISO(rec.end.date) : null
+  const maxCount = rec.end.type === 'after' ? rec.end.count : Infinity
+  const every = Math.max(1, Math.floor(rec.every))
+  const out: RecurrenceAmount[] = []
+  let periodStart = parseISO(rec.anchor)
+
+  for (let i = 0; i < SAFETY_LIMIT; i++) {
+    if (i >= maxCount) break
+    if (isAfter(periodStart, toD)) break
+    if (hardEnd && isAfter(periodStart, hardEnd)) break
+
+    const periodEnd = step(periodStart, every, rec.unit)
+    const days = Math.max(1, differenceInCalendarDays(periodEnd, periodStart))
+    const dailyAmount = amount / days
+    let day = periodStart
+
+    for (let j = 0; j < days; j++) {
+      if (isAfter(day, toD)) break
+      if (hardEnd && isAfter(day, hardEnd)) break
+      if (!isBefore(day, fromD)) out.push({ date: toISO(day), amount: dailyAmount })
+      day = addDays(day, 1)
+    }
+
+    periodStart = periodEnd
+  }
+
   return out
 }
 

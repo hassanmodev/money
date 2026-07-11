@@ -70,6 +70,31 @@ describe('recurring expense drawdown', () => {
     expect(r.endNominal).toBeCloseTo(500, 6) // 1000 - 5×100
   })
 
+  it('accrues a weekly amount as daily fractions when selected', () => {
+    const b = box({ openingBalance: 1000 })
+    const tx: Transaction = {
+      id: 'daily-accrual',
+      kind: 'expense',
+      boxId: b.id,
+      amount: 70,
+      currency: 'EUR',
+      date: '2026-01-01',
+      createdAt: '2026-01-01T00:00:00Z',
+      recurrence: {
+        every: 1,
+        unit: 'week',
+        anchor: '2026-01-01',
+        end: { type: 'after', count: 2 },
+        dailyAccrual: true,
+      },
+    }
+
+    const world = state([b], [tx])
+    expect(netWorthAt(world, '2026-01-01')).toBeCloseTo(990, 6)
+    expect(netWorthAt(world, '2026-01-07')).toBeCloseTo(930, 6)
+    expect(netWorthAt(world, '2026-01-14')).toBeCloseTo(860, 6)
+  })
+
   it('income lifts the destination box', () => {
     const b = box({ openingBalance: 0 })
     const tx: Transaction = {
@@ -276,4 +301,3 @@ describe('planned buys forecast onto the projection', () => {
     expect(m).toMatchObject({ label: 'Trip', date: '2027-01-01', cost: 300, planned: true })
   })
 })
-

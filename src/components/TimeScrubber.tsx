@@ -20,10 +20,10 @@ import { useTimeTravel } from '@/store/time'
 // ── the timeline's shape ────────────────────────────────────────────────────
 const ANCHOR = 0.16 // where "today" sits along the track (near the left)
 const PAST_MONTHS = 36 // how far back the left edge reaches (3 years)
-const FUTURE_MONTHS = 360 // how far ahead the right edge reaches (30 years)
+const FUTURE_MONTHS = 5 * 12 // how far ahead the right edge reaches (5 years)
 const GAMMA = 1.9 // curve steepness: >1 ⇒ fine near today, fast at the edges
 const DAYS_PER_MONTH = 365.25 / 12
-const SNAP_DAYS = 8 // magnetic pull back to today near the anchor
+const SNAP_DAYS = 0 // magnetic pull back to today near the anchor
 
 // Year ticks hung along the horizon. Majors are labelled and taller; minors are
 // short hairlines that break up the runway so it reads as a ruler, not a smear.

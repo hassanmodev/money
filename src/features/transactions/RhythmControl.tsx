@@ -16,6 +16,7 @@ import {
   PopoverClose,
   PopoverContent,
   PopoverTrigger,
+  Switch,
 } from '@/ui'
 
 const spring = { type: 'spring' as const, stiffness: 420, damping: 32 }
@@ -271,7 +272,12 @@ export function RhythmControl({
                   <PopoverClose key={u} asChild>
                     <button
                       type="button"
-                      onClick={() => set({ unit: u })}
+                      onClick={() =>
+                        set({
+                          unit: u,
+                          dailyAccrual: u === 'day' ? undefined : rec.dailyAccrual,
+                        })
+                      }
                       className={cn(
                         'rounded-lg px-2.5 py-1.5 text-left text-sm capitalize transition-colors',
                         u === rec.unit ? 'bg-clay/15 text-ink' : 'text-muted hover:bg-raised',
@@ -302,6 +308,22 @@ export function RhythmControl({
       <div className="mt-4">
         <RhythmRibbon rec={rec} />
       </div>
+
+      {rec.unit !== 'day' && (
+        <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-line/70 bg-sunken/30 px-3 py-2.5">
+          <div>
+            <div className="text-sm font-medium text-ink">Accrue daily</div>
+            <div className="text-xs text-faint">
+              Spread each period's amount evenly across its calendar days
+            </div>
+          </div>
+          <Switch
+            checked={rec.dailyAccrual ?? false}
+            onCheckedChange={(dailyAccrual) => set({ dailyAccrual })}
+            aria-label="Accrue recurring amount daily"
+          />
+        </div>
+      )}
 
       <div className="mt-4">
         <div className="mb-1.5 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.1em] text-faint">

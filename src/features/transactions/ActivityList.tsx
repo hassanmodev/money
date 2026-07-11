@@ -59,6 +59,7 @@ function TransactionRow({ tx }: { tx: Transaction }) {
             <Chip className="gap-1 px-2 py-0.5 text-[10px]">
               <Repeat className="size-2.5" />
               {cadenceLabel(tx.recurrence)}
+              {tx.recurrence.dailyAccrual && tx.recurrence.unit !== 'day' ? ' · daily' : ''}
             </Chip>
           )}
         </div>
