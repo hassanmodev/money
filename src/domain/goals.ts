@@ -377,7 +377,7 @@ export interface ScheduleOptions extends HappinessOptions {
   groups?: GoalGroup[]
 }
 
-/** A balance this small counts as an empty pot — avoids dividing by ~0 growth. */
+/** Numerical tolerance when checking whether a funding pot went negative. */
 const POT_EPS = 1e-6
 
 /**
@@ -385,16 +385,17 @@ const POT_EPS = 1e-6
  *
  * Unlike {@link planGoals} — a static knapsack that buys everything affordable
  * *today* — this reads the funding pot as a **trajectory** (`budgetCurve`) and
- * picks an achieve-*date* for each goal. Because spending money stops it
- * compounding, sometimes the best move is to *wait*: let the pot grow so a
- * goal you can't afford now (or a second goal you'd otherwise have to drop)
- * fits later. A spend of `C` at grid step `k` is modelled as forgoing the
- * growth that money would have earned — it shaves `C × pot(t)/pot(k)` off the
- * pot at every later step `t`, so early spending genuinely costs future budget.
+ * picks an achieve-*date* for each goal. Sometimes the best move is to *wait*:
+ * preserve today's cash for a substantially better alternative that becomes
+ * affordable later, or let external deposits make room for another goal.
+ * A spend of `C` at grid step `k` removes the same fixed `C` from every later
+ * step. Changes in `budgetCurve` are cash flows, not an implied percentage
+ * return earned by every pound already in the pot.
  *
  * The search is a beam over (goal → date | drop) decisions, taken in
- * happiness-per-cost order. When the pot is flat (no growth) waiting never pays
- * and this collapses back to the greedy knapsack — same answer as `planGoals`.
+ * happiness-per-cost order. When the pot is flat, waiting never creates more
+ * room and this collapses back to the greedy knapsack — same answer as
+ * `planGoals`.
  */
 export function planGoalsScheduled(goals: Goal[], opts: ScheduleOptions): ScheduledPlan {
   const { grid, budgetCurve, beamWidth = 16 } = opts
@@ -449,16 +450,16 @@ export function planGoalsScheduled(goals: Goal[], opts: ScheduleOptions): Schedu
   // of all at zero boost, where it adds nothing yet still jumped the queue.)
   scored.sort((a, b) => b.density - a.density || b.baseHappiness - a.baseHappiness)
 
-  // The pot at grid step `t`, after a set of dated spends, each spend losing the
-  // growth it would have earned between its step and `t`.
+  // The pot at grid step `t`, after fixed-cost dated spends. The raw curve
+  // already contains deposits and withdrawals; a goal purchase must not inherit
+  // the curve's percentage change as though every cash flow were investment
+  // return.
   type Commit = { grid: number; cost: number }
   const potAt = (t: number, commits: Commit[]): number => {
     let v = budgetCurve[t]
     for (const c of commits) {
       if (c.grid > t) continue
-      const baseK = budgetCurve[c.grid]
-      const grow = baseK > POT_EPS ? budgetCurve[t] / baseK : 1
-      v -= c.cost * grow
+      v -= c.cost
     }
     return v
   }

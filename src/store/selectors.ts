@@ -58,7 +58,8 @@ export function useGoalGroups(): GoalGroup[] {
 
 /**
  * The time-aware plan: each open goal gets an achieve-date along the funding
- * pot's growth curve, deferring purchases when waiting unlocks more happiness.
+ * pot's projected cash-flow curve, deferring purchases when spending now would
+ * block a better goal later.
  * The grid is monthly from `now` out to the horizon.
  */
 export function useScheduledPlan(opts: HappinessOptions): ScheduledPlan {

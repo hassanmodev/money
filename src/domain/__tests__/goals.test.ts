@@ -269,9 +269,9 @@ describe('planGoalsScheduled (time-aware planner)', () => {
     expect(plan.scheduled[0].achieveDate).toBe('2028-01-01') // first date pot ≥ 200
   })
 
-  it('defers the densest goal so a second one also fits — beating buy-it-now', () => {
-    // Pot ~5×s over the horizon. Buying g1 now drains all future growth and
-    // strands g2; waiting one year lets both land, for more total happiness.
+  it('treats future deposits as cash flows, not returns on an earlier purchase', () => {
+    // Buying g1 for 100 now leaves exactly 100 when a later deposit raises the
+    // raw pot to 200. Its cost must not be magnified by the curve's 2× increase.
     const g1 = goal({ id: 'g1', cost: 100, value: { type: 'flat', rating: 10 } })
     const g2 = goal({ id: 'g2', cost: 100, value: { type: 'flat', rating: 8 } })
     const o: ScheduleOptions = { ...flat(), budgetCurve: [100, 200, 350, 500] }
@@ -279,11 +279,8 @@ describe('planGoalsScheduled (time-aware planner)', () => {
 
     expect(plan.scheduled.map((s) => s.goal.id).sort()).toEqual(['g1', 'g2'])
     expect(plan.dropped).toHaveLength(0)
-    expect(plan.scheduled.every((s) => s.achieveDate !== NOW)).toBe(true) // both deferred to fit
-
-    // and it genuinely beats spending everything on the densest goal today
-    const buyNowOnly = goalHappiness(g1, NOW, o)
-    expect(plan.happiness).toBeGreaterThan(buyNowOnly)
+    expect(plan.scheduled.find((s) => s.goal.id === 'g1')!.achieveDate).toBe(NOW)
+    expect(plan.scheduled.find((s) => s.goal.id === 'g2')!.achieveDate).toBe('2027-01-01')
   })
 
   it('schedules free goals immediately and drops worthless ones', () => {
@@ -335,6 +332,20 @@ describe('alternative groups & upgrade paths', () => {
     expect(plan.scheduled.map((s) => s.goal.id)).toEqual(['b']) // the better option
     expect(plan.scheduled[0].achieveDate).toBe(NOW)
     expect(plan.dropped.map((d) => [d.goal.id, d.reason])).toEqual([['a', 'alternative']])
+  })
+
+  it('waits for a much better alternative instead of spending on the affordable one', () => {
+    const okayNow = goal({ id: 'okay-now', cost: 100, value: { type: 'flat', rating: 4 }, groupId: 'grp' })
+    const muchBetter = goal({ id: 'much-better', cost: 200, value: { type: 'flat', rating: 10 }, groupId: 'grp' })
+    const o: ScheduleOptions = {
+      ...flat(),
+      budgetCurve: [100, 150, 200, 250],
+      groups: [group({ upgradable: false })],
+    }
+    const plan = planGoalsScheduled([okayNow, muchBetter], o)
+
+    expect(plan.scheduled.map((s) => [s.goal.id, s.achieveDate])).toEqual([['much-better', '2028-01-01']])
+    expect(plan.dropped.map((d) => [d.goal.id, d.reason])).toEqual([['okay-now', 'alternative']])
   })
 
   it('sequences a cheap→premium upgrade when the pot grows into the costlier option', () => {

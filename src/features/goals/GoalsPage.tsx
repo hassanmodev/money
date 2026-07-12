@@ -278,7 +278,7 @@ export default function GoalsPage() {
         <div className="mb-1 flex items-center justify-between gap-3">
           <h2 className="font-serif text-lg text-ink">Best plan</h2>
           <span className="text-xs text-faint">
-            within <Money amount={budget} compact /> · waits when the pot can grow into more
+            within <Money amount={budget} compact /> · waits when spending now would block a better goal
           </span>
         </div>
 
