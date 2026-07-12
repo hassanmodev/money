@@ -11,6 +11,7 @@ import {
 import { cn } from '@/lib/cn'
 import { SWATCHES } from '@/lib/palette'
 import { todayISO } from '@/lib/date'
+import { useBoxValue } from '@/store/selectors'
 import { useStore } from '@/store/store'
 import { Button, ConfirmDialog, CurrencyPicker, Field, Input, Sheet, Textarea } from '@/ui'
 import { KIND_ICON, KIND_LABEL } from '@/ui/icons'
@@ -79,13 +80,16 @@ export function BoxEditor({
   const addBox = useStore((s) => s.addBox)
   const updateBox = useStore((s) => s.updateBox)
   const removeBox = useStore((s) => s.removeBox)
+  const setBoxBalance = useStore((s) => s.setBoxBalance)
   const allBoxes = useStore((s) => s.boxes)
   const baseCurrency = useStore((s) => s.settings.baseCurrency)
+  // For an existing box the field edits today's live balance, not the historical seed.
+  const liveValue = useBoxValue(box?.id ?? '')
 
   const [name, setName] = useState(box?.name ?? '')
   const [kind, setKind] = useState<BoxKind>(box?.kind ?? 'checking')
   const [currency, setCurrency] = useState(box?.currency ?? baseCurrency)
-  const [balanceStr, setBalanceStr] = useState(String(box?.openingBalance ?? ''))
+  const [balanceStr, setBalanceStr] = useState(box ? String(liveValue) : '')
   const [openingDate, setOpeningDate] = useState(box?.openingDate ?? todayISO())
   const [color, setColor] = useState(box?.color ?? SWATCHES[0].hex)
   const [note, setNote] = useState(box?.note ?? '')
@@ -101,7 +105,7 @@ export function BoxEditor({
     setName(box?.name ?? '')
     setKind(box?.kind ?? 'checking')
     setCurrency(box?.currency ?? baseCurrency)
-    setBalanceStr(String(box?.openingBalance ?? ''))
+    setBalanceStr(box ? String(liveValue) : '')
     setOpeningDate(box?.openingDate ?? todayISO())
     setColor(box?.color ?? SWATCHES[0].hex)
     setNote(box?.note ?? '')
@@ -121,11 +125,14 @@ export function BoxEditor({
 
   const save = () => {
     const cleanForwards = forwards.filter((f) => f.toBoxId && f.share > 0)
+    const target = parseFloat(balanceStr) || 0
     const data = {
       name: name.trim() || 'Untitled box',
       kind,
       currency,
-      openingBalance: parseFloat(balanceStr) || 0,
+      // an existing box keeps its historical seed; the field above adjusts today's
+      // balance via a transaction instead (see setBoxBalance below)
+      openingBalance: box ? box.openingBalance : target,
       openingDate,
       color,
       note: note.trim() || undefined,
@@ -135,8 +142,12 @@ export function BoxEditor({
       fundsGoals: fundsGoals || undefined,
       icon: box?.icon,
     }
-    if (box) updateBox(box.id, data)
-    else addBox(data)
+    if (box) {
+      updateBox(box.id, data)
+      setBoxBalance(box.id, target)
+    } else {
+      addBox(data)
+    }
     onOpenChange(false)
   }
 
@@ -184,7 +195,10 @@ export function BoxEditor({
           <Field label="Currency">
             <CurrencyPicker value={currency} onChange={setCurrency} aria-label="Currency" />
           </Field>
-          <Field label="Opening balance">
+          <Field
+            label={box ? 'Balance' : 'Opening balance'}
+            hint={box ? 'Records a transaction that brings it here today.' : undefined}
+          >
             <div className="relative">
               <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
                 {symbol}

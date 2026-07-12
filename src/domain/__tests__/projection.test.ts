@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { boxValueAt, netWorthAt, project, type PlannedBuy } from '../projection'
+import { balanceAdjustment, boxValueAt, netWorthAt, project, type PlannedBuy } from '../projection'
 import type { Box, Effect, FinanceState, Goal, Settings, Transaction } from '../types'
 
 const settings: Settings = { baseCurrency: 'EUR', rates: { USD: 0.9 } }
@@ -283,6 +283,29 @@ describe('achieved goals draw down net worth', () => {
     const r = project(world, { from: '2026-01-01', to: '2026-12-31' })
     expect(r.markers).toHaveLength(1)
     expect(r.markers[0]).toMatchObject({ id: 'goal', date: '2026-03-01', cost: 300 })
+  })
+})
+
+describe('balanceAdjustment', () => {
+  it('proposes an income to close a shortfall', () => {
+    const b = box({ openingBalance: 100 })
+    const tx = balanceAdjustment(state([b]), b.id, 250, '2026-01-01')
+    expect(tx).toMatchObject({ kind: 'income', boxId: b.id, amount: 150, currency: 'EUR' })
+  })
+
+  it('proposes an expense to close a surplus', () => {
+    const b = box({ openingBalance: 250 })
+    const tx = balanceAdjustment(state([b]), b.id, 100, '2026-01-01')
+    expect(tx).toMatchObject({ kind: 'expense', boxId: b.id, amount: 150 })
+  })
+
+  it('is a no-op when already at the target', () => {
+    const b = box({ openingBalance: 100 })
+    expect(balanceAdjustment(state([b]), b.id, 100, '2026-01-01')).toBeNull()
+  })
+
+  it('is a no-op for an unknown box', () => {
+    expect(balanceAdjustment(state([]), 'missing', 100, '2026-01-01')).toBeNull()
   })
 })
 

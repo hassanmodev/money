@@ -12,7 +12,7 @@ import type {
   Settings,
   Transaction,
 } from '@/domain'
-import { setCustomCurrencies } from '@/domain'
+import { balanceAdjustment, setCustomCurrencies } from '@/domain'
 import { newId } from '@/lib/id'
 import { todayISO } from '@/lib/date'
 import { createEmpty, createSeed } from './seed'
@@ -34,6 +34,8 @@ interface Actions {
   addTransaction: (tx: NewTransaction) => string
   updateTransaction: (id: string, patch: Partial<Transaction>) => void
   removeTransaction: (id: string) => void
+  /** Set a box's balance as of a date by recording the income/expense that closes the gap. */
+  setBoxBalance: (boxId: string, target: number, dateISO?: string) => void
 
   addGoal: (goal: NewGoal) => string
   updateGoal: (id: string, patch: Partial<Goal>) => void
@@ -144,6 +146,12 @@ export const useStore = create<Store>()(
         })),
       removeTransaction: (id) =>
         set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) })),
+      setBoxBalance: (boxId, target, dateISO) =>
+        set((s) => {
+          const tx = balanceAdjustment(s, boxId, target, dateISO ?? todayISO())
+          if (!tx) return {}
+          return { transactions: [...s.transactions, { ...tx, id: newId('tx'), createdAt: now() }] }
+        }),
 
       addGoal: (goal) => {
         const id = newId('goal')

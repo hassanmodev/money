@@ -327,6 +327,31 @@ export function boxValueAt(
   return series[boxId]?.[0] ?? 0
 }
 
+/**
+ * The transaction that would carry a box's balance to `target` as of
+ * `dateISO` — an income if it's under, an expense if it's over. Null if the
+ * box is already there (or doesn't exist).
+ */
+export function balanceAdjustment(
+  state: FinanceState,
+  boxId: string,
+  target: number,
+  dateISO: ISODate,
+): Omit<Transaction, 'id' | 'createdAt'> | null {
+  const box = state.boxes.find((b) => b.id === boxId)
+  if (!box) return null
+  const delta = target - boxValueAt(state, boxId, dateISO)
+  if (Math.abs(delta) < 0.005) return null
+  return {
+    kind: delta > 0 ? 'income' : 'expense',
+    boxId,
+    amount: Math.abs(delta),
+    currency: box.currency,
+    note: 'Balance adjustment',
+    date: dateISO,
+  }
+}
+
 /** Total net worth on a date, in the base currency. */
 export function netWorthAt(state: FinanceState, dateISO: ISODate, plannedBuys: PlannedBuy[] = []): number {
   const active = state.boxes.filter((b) => !b.archived)
