@@ -209,7 +209,11 @@ export class FlowNode {
    * currency — the network converts at the boundary).
    */
   receive(level: number, amount: number): { level: number; pushes: Split['pushes'] } {
-    const { overflow, level: filled } = this.curve.absorb(level, amount)
+    const debtPayment = Math.min(amount, Math.max(0, -level))
+    const { overflow, level: filled } = this.curve.absorb(
+      level + debtPayment,
+      amount - debtPayment,
+    )
     const { pushes, kept } = this.routing.split(overflow)
     return { level: filled + kept, pushes }
   }

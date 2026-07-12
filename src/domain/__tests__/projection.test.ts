@@ -180,6 +180,49 @@ describe('forwarding', () => {
     expect(boxValueAt(world, 'chk', '2026-02-01')).toBeCloseTo(1000, 6)
     expect(boxValueAt(world, 'sav', '2026-02-01')).toBeCloseTo(1500, 6)
   })
+
+  it('repays a negative source before forwarding later income', () => {
+    const checking = box({
+      id: 'chk',
+      acceptance: [{ level: 0, rate: 0 }],
+      forwards: [{ id: 'f1', toBoxId: 'sav', share: 1 }],
+    })
+    const savings = box({ id: 'sav' })
+    const transactions: Transaction[] = [
+      {
+        id: 'expense',
+        kind: 'expense',
+        boxId: 'chk',
+        amount: 100,
+        currency: 'EUR',
+        date: '2026-01-02',
+        createdAt: '2026-01-01T00:00:00Z',
+      },
+      {
+        id: 'income-1',
+        kind: 'income',
+        boxId: 'chk',
+        amount: 40,
+        currency: 'EUR',
+        date: '2026-01-03',
+        createdAt: '2026-01-01T00:00:00Z',
+      },
+      {
+        id: 'income-2',
+        kind: 'income',
+        boxId: 'chk',
+        amount: 100,
+        currency: 'EUR',
+        date: '2026-01-04',
+        createdAt: '2026-01-01T00:00:00Z',
+      },
+    ]
+    const world = state([checking, savings], transactions)
+    expect(boxValueAt(world, 'chk', '2026-01-03')).toBeCloseTo(-60, 6)
+    expect(boxValueAt(world, 'sav', '2026-01-03')).toBeCloseTo(0, 6)
+    expect(boxValueAt(world, 'chk', '2026-01-04')).toBeCloseTo(0, 6)
+    expect(boxValueAt(world, 'sav', '2026-01-04')).toBeCloseTo(40, 6)
+  })
 })
 
 describe('achieved goals draw down net worth', () => {

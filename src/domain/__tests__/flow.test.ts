@@ -131,6 +131,26 @@ describe('FlowNetwork', () => {
     expect(net.balance(a.id)).toBeCloseTo(0, 6)
   })
 
+  it('keeps a deposit that is smaller than the source debt', () => {
+    const a = box({ acceptance: [{ level: 0, rate: 0 }], forwards: [fwd('dst', 1)] })
+    const dst = box({ id: 'dst' })
+    const net = new FlowNetwork([a, dst], settings)
+    net.withdraw(a.id, 100)
+    net.deposit(a.id, 40)
+    expect(net.balance(a.id)).toBeCloseTo(-60, 6)
+    expect(net.balance('dst')).toBeCloseTo(0, 6)
+  })
+
+  it('forwards only the surplus after clearing source debt', () => {
+    const a = box({ acceptance: [{ level: 0, rate: 0 }], forwards: [fwd('dst', 1)] })
+    const dst = box({ id: 'dst' })
+    const net = new FlowNetwork([a, dst], settings)
+    net.withdraw(a.id, 100)
+    net.deposit(a.id, 140)
+    expect(net.balance(a.id)).toBeCloseTo(0, 6)
+    expect(net.balance('dst')).toBeCloseTo(40, 6)
+  })
+
   it('ignores forwards to boxes that are not in the network', () => {
     const a = box({ acceptance: [{ level: 0, rate: 0 }], forwards: [fwd('ghost', 1)] })
     const net = new FlowNetwork([a], settings)
