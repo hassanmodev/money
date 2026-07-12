@@ -1,11 +1,11 @@
 import { ArrowUp, Sparkles, Target, Plus, Wallet } from 'lucide-react'
 import { motion } from 'motion/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { goalHappiness, umbrellaSources, type Goal, type GoalStatus, type HappinessOptions } from '@/domain'
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
-import { addMonthsISO, fmtMonthYear, todayISO } from '@/lib/date'
+import { addMonthsISO, fmtMonthYear } from '@/lib/date'
 import { useActiveBoxes, useBankedHappiness, useCommittedPlan, useGoalAutoApply, useGoalBudget, useGoalFundingBoxes, useGoalGroups, useGoals } from '@/store/selectors'
 import { useViewDate } from '@/store/time'
 import { useStore } from '@/store/store'
@@ -67,13 +67,12 @@ export default function GoalsPage() {
   // The time cursor — "what's happened by when". The plan itself is anchored at
   // the real today (useCommittedPlan), so scrubbing the cursor reveals which buys
   // have already happened rather than re-planning from the cursor.
-  const today = todayISO()
   const now = useViewDate()
-  const horizon = addMonthsISO(today, HORIZON_MONTHS)
+  const horizon = addMonthsISO(now, HORIZON_MONTHS)
   const halfLifeMonths = settings.happinessHalfLifeMonths ?? 24
   const opts: HappinessOptions = useMemo(
-    () => ({ now: today, horizon, halfLifeMonths }),
-    [today, horizon, halfLifeMonths],
+    () => ({ now, horizon, halfLifeMonths }),
+    [now, horizon, halfLifeMonths],
   )
 
   // The budget isn't typed in — it's the live value of the goal-funding pool.
@@ -96,12 +95,12 @@ export default function GoalsPage() {
   // The date a goal has actually *happened* by the cursor: its real achieved
   // date, or — once the cursor reaches it — the committed plan's buy date. Money
   // is already out by then, so the goal reads as done.
-  const happenedDate = (g: Goal): string | undefined => {
-    if (g.status === 'done' && g.doneDate) return g.doneDate
+  const happenedDate = useCallback((g: Goal): string | undefined => {
+    if (g.status === 'done' && g.doneDate && g.doneDate <= now) return g.doneDate
     if (!autoApply) return undefined
     const s = scheduledById.get(g.id)
     return s && s.achieveDate <= now ? s.achieveDate : undefined
-  }
+  }, [autoApply, now, scheduledById])
   const effStatus = (g: Goal): GoalStatus =>
     g.status === 'dismissed' ? 'dismissed' : happenedDate(g) ? 'done' : 'open'
 
@@ -114,8 +113,8 @@ export default function GoalsPage() {
       ),
     [goals, opts, scheduledById],
   )
-  // "Now" if it lands today, else the month it lands in.
-  const whenLabel = (achieveDate: string) => (achieveDate <= today ? 'Now' : fmtMonthYear(achieveDate))
+  // "Now" if it has reached the view cursor, else the month it lands in.
+  const whenLabel = (achieveDate: string) => (achieveDate <= now ? 'Now' : fmtMonthYear(achieveDate))
 
   // A goal's card worth + status badge — shared by standalone cards and stacks.
   const cardOf = (g: Goal) => {
@@ -193,8 +192,7 @@ export default function GoalsPage() {
         planned: true,
       }))
     return [...achieved, ...planned]
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [goals, plan, chartMode, now])
+  }, [goals, plan, chartMode, happenedDate])
 
   const openCount = goals.filter((g) => effStatus(g) === 'open').length
   const maxDensity = Math.max(
@@ -358,7 +356,7 @@ export default function GoalsPage() {
             {chartMode === 'banked' ? 'Nothing achieved yet.' : 'The plan is empty — mark a box “Funds goals”, or add goals.'}
           </div>
         ) : (
-          <HappinessChart tracks={tracks} now={today} horizon={horizon} halfLifeMonths={halfLifeMonths} />
+          <HappinessChart tracks={tracks} now={now} horizon={horizon} halfLifeMonths={halfLifeMonths} />
         )}
 
         <p className="mt-2 text-xs text-faint">

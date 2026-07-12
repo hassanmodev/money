@@ -20,12 +20,12 @@ import {
   type ProjectionResult,
   type ScheduledPlan,
 } from '@/domain'
-import { addMonthsISO, todayISO, yearsBetween } from '@/lib/date'
+import { addMonthsISO, yearsBetween } from '@/lib/date'
 import { useStore } from './store'
-import { useTimeTravel } from './time'
+import { useToday, useViewDate } from './time'
 
 /** The app's notion of "now" — the time-travel cursor (defaults to today). */
-const useNow = () => useTimeTravel((s) => s.viewDate)
+const useNow = useViewDate
 
 /** How far ahead the committed plan looks when forecasting planned buys. */
 const PLAN_HORIZON_MONTHS = 48
@@ -82,7 +82,7 @@ export function useScheduledPlan(opts: HappinessOptions): ScheduledPlan {
  */
 export function useCommittedPlan(): ScheduledPlan {
   const halfLifeMonths = useStore((s) => s.settings.happinessHalfLifeMonths ?? 24)
-  const now = todayISO()
+  const now = useToday()
   const opts = useMemo<HappinessOptions>(
     () => ({ now, horizon: addMonthsISO(now, PLAN_HORIZON_MONTHS), halfLifeMonths }),
     [now, halfLifeMonths],
@@ -111,7 +111,7 @@ export function plannedBuysFromPlan(plan: ScheduledPlan, today: string): Planned
 /** The committed plan's buys from today onward, before the auto-apply setting. */
 export function useCommittedPlannedBuys(): PlannedBuy[] {
   const plan = useCommittedPlan()
-  const today = todayISO()
+  const today = useToday()
   return useMemo(() => plannedBuysFromPlan(plan, today), [plan, today])
 }
 

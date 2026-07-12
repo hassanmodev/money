@@ -15,7 +15,7 @@ import { cn } from '@/lib/cn'
 import { addDaysISO, daysBetween, fmtDate, todayISO } from '@/lib/date'
 import { formatMoney, project } from '@/domain'
 import { useFinanceState } from '@/store/selectors'
-import { useTimeTravel } from '@/store/time'
+import { useTimeTravel, useViewDate } from '@/store/time'
 
 // ── the timeline's shape ────────────────────────────────────────────────────
 const ANCHOR = 0.16 // where "today" sits along the track (near the left)
@@ -116,7 +116,7 @@ function offsetLabel(offsetDays: number): string {
 }
 
 export function TimeScrubber() {
-  const view = useTimeTravel((s) => s.viewDate)
+  const view = useViewDate()
   const setViewDate = useTimeTravel((s) => s.setViewDate)
   const reset = useTimeTravel((s) => s.reset)
   const state = useFinanceState()
