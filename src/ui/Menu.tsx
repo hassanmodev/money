@@ -18,6 +18,7 @@ export function Menu({
         <DropdownMenu.Content
           align={align}
           sideOffset={6}
+          onClick={(event) => event.stopPropagation()}
           className="z-[60] min-w-44 rounded-xl border border-line bg-raised p-1 shadow-lift"
         >
           {children}
