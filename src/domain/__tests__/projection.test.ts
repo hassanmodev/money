@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { boxValueAt, netWorthAt, project, type PlannedBuy } from '../projection'
+import { planGoalsScheduled } from '../goals'
+import {
+  boxValueAt,
+  goalBudgetCurve,
+  goalFundingBudget,
+  netWorthAt,
+  project,
+  type PlannedBuy,
+} from '../projection'
 import type { Box, Effect, FinanceState, Goal, Settings, Transaction } from '../types'
 
 const settings: Settings = { baseCurrency: 'EUR', rates: { USD: 0.9 } }
@@ -299,5 +307,74 @@ describe('planned buys forecast onto the projection', () => {
     const r = project(state([sav]), { from: '2026-01-01', to: '2028-01-01' }, [planned])
     const m = r.markers.find((x) => x.planned)
     expect(m).toMatchObject({ label: 'Trip', date: '2027-01-01', cost: 300, planned: true })
+  })
+})
+
+describe('goal funding spendable cap', () => {
+  const poolBox = () => box({ id: 'sav', openingBalance: 1000, fundsGoals: true })
+  const withSettings = (patch: Partial<Settings>): FinanceState => ({
+    ...state([poolBox()]),
+    settings: { ...settings, ...patch },
+  })
+
+  it('defaults to the full pool when caps are unset', () => {
+    const world = state([poolBox()])
+    expect(goalFundingBudget(world, '2026-06-01')).toBeCloseTo(1000, 6)
+    expect(goalBudgetCurve(world, ['2026-06-01'])[0]).toBeCloseTo(1000, 6)
+  })
+
+  it('aside only: pool − aside, floored at 0', () => {
+    expect(goalFundingBudget(withSettings({ goalBudgetAside: 300 }), '2026-06-01')).toBeCloseTo(700, 6)
+    expect(goalFundingBudget(withSettings({ goalBudgetAside: 1500 }), '2026-06-01')).toBe(0)
+  })
+
+  it('% only: pool × percent', () => {
+    expect(goalFundingBudget(withSettings({ goalBudgetSpendPercent: 0.7 }), '2026-06-01')).toBeCloseTo(700, 6)
+  })
+
+  it('both: min(pool × %, pool − aside)', () => {
+    // pool=1000 → 70%=700, aside 100 → 900 → min = 700
+    expect(
+      goalFundingBudget(withSettings({ goalBudgetSpendPercent: 0.7, goalBudgetAside: 100 }), '2026-06-01'),
+    ).toBeCloseTo(700, 6)
+    // pool=1000 → 90%=900, aside 400 → 600 → min = 600
+    expect(
+      goalFundingBudget(withSettings({ goalBudgetSpendPercent: 0.9, goalBudgetAside: 400 }), '2026-06-01'),
+    ).toBeCloseTo(600, 6)
+  })
+
+  it('goalBudgetCurve applies the same cap on every grid date', () => {
+    const world = withSettings({ goalBudgetSpendPercent: 0.5, goalBudgetAside: 200 })
+    const curve = goalBudgetCurve(world, ['2026-01-01', '2026-06-01'])
+    // min(1000×0.5, 1000−200) = 500
+    expect(curve[0]).toBeCloseTo(500, 6)
+    expect(curve[1]).toBeCloseTo(500, 6)
+  })
+
+  it('planner spend never exceeds the capped spendable budget', () => {
+    const world = withSettings({ goalBudgetAside: 400 }) // spendable 600
+    const budget = goalFundingBudget(world, '2026-01-01')
+    expect(budget).toBeCloseTo(600, 6)
+    const curve = goalBudgetCurve(world, ['2026-01-01', '2027-01-01', '2028-01-01'])
+    const g1: Goal = {
+      id: 'g1',
+      name: 'A',
+      cost: 400,
+      value: { type: 'flat', rating: 80 },
+      status: 'open',
+      color: '#9eb87f',
+      createdAt: '2026-01-01T00:00:00Z',
+    }
+    const g2: Goal = { ...g1, id: 'g2', name: 'B', cost: 400, value: { type: 'flat', rating: 70 } }
+    const plan = planGoalsScheduled([g1, g2], {
+      now: '2026-01-01',
+      horizon: '2029-01-01',
+      halfLifeMonths: 0,
+      grid: ['2026-01-01', '2027-01-01', '2028-01-01'],
+      budgetCurve: curve,
+    })
+    expect(plan.spend).toBeLessThanOrEqual(budget + 1e-9)
+    expect(plan.spend).toBe(400)
+    expect(plan.dropped.map((d) => d.goal.id)).toEqual(['g2'])
   })
 })

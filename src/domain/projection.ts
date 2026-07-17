@@ -360,9 +360,25 @@ export function goalFundingBoxes(state: FinanceState, dateISO: ISODate): GoalFun
   return pool.map((b) => ({ boxId: b.id, base: toBase(series[b.id][0], b.currency, state.settings) }))
 }
 
-/** The planner's spendable budget: the summed base value of {@link goalFundingBoxes}. */
+/**
+ * Cap the raw funding pool by optional aside / spend-percent settings.
+ * Unset settings → full pool; both set → min(pool × %, pool − aside).
+ */
+function spendableGoalBudget(pool: number, settings: Settings): number {
+  const aside = settings.goalBudgetAside
+  const pct = settings.goalBudgetSpendPercent
+  const hasAside = aside != null
+  const hasPct = pct != null
+  if (!hasAside && !hasPct) return pool
+  const afterAside = hasAside ? Math.max(0, pool - aside) : Infinity
+  const afterPct = hasPct ? pool * pct : Infinity
+  return Math.min(afterAside, afterPct)
+}
+
+/** The planner's spendable budget: the capped sum of {@link goalFundingBoxes}. */
 export function goalFundingBudget(state: FinanceState, dateISO: ISODate): number {
-  return goalFundingBoxes(state, dateISO).reduce((sum, f) => sum + f.base, 0)
+  const pool = goalFundingBoxes(state, dateISO).reduce((sum, f) => sum + f.base, 0)
+  return spendableGoalBudget(pool, state.settings)
 }
 
 /**
@@ -371,6 +387,8 @@ export function goalFundingBudget(state: FinanceState, dateISO: ISODate): number
  * time-aware planner can see the budget grow. No open-goal spends are baked in
  * (those are what the planner is deciding); spends from already-achieved goals
  * are, since they've really left. Returns zeros when nothing funds open goals.
+ * Each point is capped by the same aside / spend-percent rules as
+ * {@link goalFundingBudget}.
  */
 export function goalBudgetCurve(state: FinanceState, grid: ISODate[]): number[] {
   const active = state.boxes.filter((b) => !b.archived)
@@ -378,7 +396,8 @@ export function goalBudgetCurve(state: FinanceState, grid: ISODate[]): number[] 
   if (funders.length === 0 || grid.length === 0) return grid.map(() => 0)
   const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], active, state.settings.baseCurrency)]
   const series = simulate(active, txns, state.settings, grid.map((d) => parseISO(d).getTime()))
-  return grid.map((_, i) =>
-    funders.reduce((sum, b) => sum + toBase(series[b.id][i], b.currency, state.settings), 0),
-  )
+  return grid.map((_, i) => {
+    const pool = funders.reduce((sum, b) => sum + toBase(series[b.id][i], b.currency, state.settings), 0)
+    return spendableGoalBudget(pool, state.settings)
+  })
 }

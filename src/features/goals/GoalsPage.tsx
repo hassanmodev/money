@@ -2,14 +2,14 @@ import { ArrowUp, Sparkles, Target, Plus, Wallet } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { goalHappiness, umbrellaSources, type Goal, type GoalStatus, type HappinessOptions } from '@/domain'
+import { currencyMeta, goalHappiness, umbrellaSources, type Goal, type GoalStatus, type HappinessOptions } from '@/domain'
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
 import { addMonthsISO, fmtMonthYear } from '@/lib/date'
 import { useActiveBoxes, useBankedHappiness, useCommittedPlan, useGoalAutoApply, useGoalBudget, useGoalFundingBoxes, useGoalGroups, useGoals } from '@/store/selectors'
 import { useViewDate } from '@/store/time'
 import { useStore } from '@/store/store'
-import { Button, Card, Chip, Money, Segmented } from '@/ui'
+import { Button, Card, Chip, Field, Input, Money, Segmented } from '@/ui'
 import { GoalCard } from './GoalCard'
 import { GoalEditor } from './GoalEditor'
 import { GoalStack } from './GoalStack'
@@ -262,6 +262,52 @@ export default function GoalsPage() {
             />
             <p className="text-xs text-faint">Worth halves every {halfLifeMonths} months further out.</p>
           </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-4 border-t border-line pt-5 sm:grid-cols-2">
+          <Field
+            label="Keep aside"
+            hint={`Minimum reserved in ${currencyMeta(settings.baseCurrency).code} — not spent on goals.`}
+          >
+            <Input
+              value={settings.goalBudgetAside != null ? String(settings.goalBudgetAside) : ''}
+              onChange={(e) => {
+                const v = e.target.value.trim()
+                if (v === '') {
+                  updateSettings({ goalBudgetAside: undefined })
+                  return
+                }
+                const n = parseFloat(v)
+                if (!Number.isNaN(n)) updateSettings({ goalBudgetAside: Math.max(0, n) })
+              }}
+              inputMode="decimal"
+              placeholder="None"
+              aria-label="Keep aside"
+            />
+          </Field>
+          <Field label="% to spend" hint="Share of the pool the planner may spend. Leave blank for 100%.">
+            <Input
+              value={
+                settings.goalBudgetSpendPercent != null
+                  ? String(Math.round(settings.goalBudgetSpendPercent * 1000) / 10)
+                  : ''
+              }
+              onChange={(e) => {
+                const v = e.target.value.trim()
+                if (v === '') {
+                  updateSettings({ goalBudgetSpendPercent: undefined })
+                  return
+                }
+                const n = parseFloat(v)
+                if (!Number.isNaN(n)) {
+                  updateSettings({ goalBudgetSpendPercent: Math.min(1, Math.max(0, n / 100)) })
+                }
+              }}
+              inputMode="decimal"
+              placeholder="100"
+              aria-label="Percent to spend"
+            />
+          </Field>
         </div>
       </Card>
 

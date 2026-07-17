@@ -237,6 +237,17 @@ export interface Settings {
   /** whether scheduled goal buys automatically deduct from balances once reached */
   goalAutoApply?: boolean
   /**
+   * Minimum amount reserved from the goals funding pool (base currency) — not
+   * spent on goals. Unset = no reserve. Combined with {@link goalBudgetSpendPercent}
+   * as min(pool × percent, pool − aside).
+   */
+  goalBudgetAside?: number
+  /**
+   * Fraction of the goals funding pool that may be spent (0..1). Unset = full
+   * pool. Combined with {@link goalBudgetAside} as min(pool × percent, pool − aside).
+   */
+  goalBudgetSpendPercent?: number
+  /**
    * User edits to the currency catalogue: brand-new custom currencies *and*
    * overrides of built-in ones (matched by `code`). Merged over the JSON
    * defaults to form the live catalogue.
