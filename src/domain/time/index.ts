@@ -65,11 +65,17 @@ export function computeWeek(
   const byId = new Map(state.projects.map((p) => [p.id, p]))
 
   const planBlocks = [
-    ...state.blocks.filter((b) => b.layer === 'plan' && inWeek(weekStart, b.date)),
+    ...state.blocks.filter(
+      (b) => b.layer === 'plan' && inWeek(weekStart, b.date) && byId.has(b.projectId),
+    ),
     ...expandRules(state.rules, state.projects, weekStart, weekEnd),
   ]
-  const actualBlocks = state.blocks.filter((b) => b.layer === 'actual' && inWeek(weekStart, b.date))
-  const fragments = state.fragments.filter((f) => inWeek(weekStart, format(parseISO(f.at), 'yyyy-MM-dd')))
+  const actualBlocks = state.blocks.filter(
+    (b) => b.layer === 'actual' && inWeek(weekStart, b.date) && byId.has(b.projectId),
+  )
+  const fragments = state.fragments.filter(
+    (f) => byId.has(f.projectId) && inWeek(weekStart, format(parseISO(f.at), 'yyyy-MM-dd')),
+  )
 
   const scoreCtx = buildScoreContext(state, weekStart, now)
   const simPlan = scoreCtx.sim

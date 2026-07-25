@@ -135,6 +135,17 @@ describe('expandRules', () => {
     )
     expect(blocks).toHaveLength(0)
   })
+
+  it('drops rules whose project no longer exists — orphan stamps must not claim slots', () => {
+    // leftover demo rule (tue,thu 20-22) after the TV project was removed
+    const blocks = expandRules(
+      [mkRule({ id: 'r-tv', projectId: 'p-ent-screen-tv', text: 'tue,thu 20-22' })],
+      [gym],
+      WEEK,
+      '2026-01-11',
+    )
+    expect(blocks).toHaveLength(0)
+  })
 })
 
 describe('describeRule', () => {

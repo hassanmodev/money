@@ -65,12 +65,13 @@ const overlapMin = (
  */
 export function hogSignals(state: TimeState, weekStart: ISODate): Signal[] {
   const window = weekWindow(weekStart)
+  const known = new Set(state.projects.map((p) => p.id))
   const ruleBlocks = expandRules(state.rules, state.projects, window.from, window.to)
   const planBlocks = [
-    ...state.blocks.filter((b) => b.layer === 'plan'),
+    ...state.blocks.filter((b) => b.layer === 'plan' && known.has(b.projectId)),
     ...ruleBlocks,
   ]
-  const actualBlocks = state.blocks.filter((b) => b.layer === 'actual')
+  const actualBlocks = state.blocks.filter((b) => b.layer === 'actual' && known.has(b.projectId))
 
   const out: Signal[] = []
   for (const p of state.projects) {

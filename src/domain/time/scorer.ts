@@ -76,11 +76,13 @@ export function buildScoreContext(
   now: { date: ISODate; minute: number },
 ): ScoreContext {
   const weekEnd = format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd')
-  const ruleBlocks = expandRules(state.rules, state.projects, weekStart, weekEnd)
-  const manual = state.blocks.filter((b) => b.layer === 'plan' && inWeek(weekStart, b.date))
-  const planBlocks = [...manual, ...ruleBlocks]
-
   const byId = new Map(state.projects.map((p) => [p.id, p]))
+  const ruleBlocks = expandRules(state.rules, state.projects, weekStart, weekEnd)
+  // drop orphan blocks (project gone) — they can't render and must not block fills
+  const manual = state.blocks.filter(
+    (b) => b.layer === 'plan' && inWeek(weekStart, b.date) && byId.has(b.projectId),
+  )
+  const planBlocks = [...manual, ...ruleBlocks]
   const sim = simulate({
     qualities: state.qualities,
     weekStart,

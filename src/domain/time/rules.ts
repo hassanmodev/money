@@ -224,7 +224,8 @@ export function expandRule(rule: ParsedRule, from: ISODate, to: ISODate): RuleOc
 
 /**
  * Expand stored rules into plan blocks for a window, honouring per-occurrence
- * skips and overrides. Occurrences of archived projects are dropped.
+ * skips and overrides. Missing or archived projects are dropped — orphan
+ * stamps must not claim slots the grid can't paint.
  */
 export function expandRules(
   rules: TimeRule[],
@@ -232,10 +233,11 @@ export function expandRules(
   from: ISODate,
   to: ISODate,
 ): Block[] {
-  const archived = new Map(projects.map((p) => [p.id, !!p.archived]))
+  const byId = new Map(projects.map((p) => [p.id, p]))
   const out: Block[] = []
   for (const rule of rules) {
-    if (archived.get(rule.projectId)) continue
+    const project = byId.get(rule.projectId)
+    if (!project || project.archived) continue
     const parsed = parseRule(rule.text)
     if (!parsed.ok) continue
     for (const occ of expandRule(parsed.rule, from, to)) {

@@ -176,4 +176,40 @@ describe('suggestWeek — fr placement', () => {
     expect(sum(suggestions, 'filler')).toBe(7 * 3 * 60)
     expect(unfit.filter((u) => u.projectId === 'filler')).toHaveLength(0)
   })
+
+  it('ignores orphan rules so fr can fill evenings they used to ghost-claim', () => {
+    // Sleep 1–9 + Work mon–fri 9–18 leave evenings free; a leftover TV rule
+    // for a deleted project must not leave invisible gaps at 20:00 tue/thu.
+    const sleep = mkProject({ id: 'sleep', dim: true })
+    const work = mkProject({ id: 'work', dim: true })
+    const fun = mkProject({ id: 'fun', fr: { share: 10, scope: 'global' } })
+    const improve = mkProject({ id: 'improve', fr: { share: 10, scope: 'global' } })
+    const { suggestions } = suggestWeek(
+      mkState({
+        qualities: flatQualities,
+        projects: [sleep, work, fun, improve],
+        rules: [
+          { id: 'r-sleep', projectId: 'sleep', text: 'daily 1-9', skipped: [], overrides: {}, createdAt: '' },
+          { id: 'r-work', projectId: 'work', text: 'mon-fri 9-18', skipped: [], overrides: {}, createdAt: '' },
+          {
+            id: 'r-tv',
+            projectId: 'p-ent-screen-tv',
+            text: 'tue,thu 20-22',
+            skipped: [],
+            overrides: {},
+            createdAt: '',
+          },
+        ],
+      }),
+      WEEK,
+      NOW_BEFORE,
+    )
+    const evenings = suggestions.filter(
+      (s) =>
+        (s.date === '2026-01-06' || s.date === '2026-01-08') &&
+        s.startMin < 22 * 60 &&
+        s.startMin + s.durationMin > 20 * 60,
+    )
+    expect(evenings.length).toBeGreaterThan(0)
+  })
 })

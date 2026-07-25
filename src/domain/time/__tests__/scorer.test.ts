@@ -26,6 +26,7 @@ describe('scorePlacement — hard constraints', () => {
   it('scores occupied slots as zero', () => {
     const busy = mkState({
       qualities: [mkQuality({ id: 'mental' })],
+      projects: [mkProject({ id: 'a' })],
       blocks: [mkBlock({ id: 'b1', projectId: 'a', startMin: 600, durationMin: 60 })],
     })
     const busyCtx = buildScoreContext(busy, WEEK, MONDAY_8AM)

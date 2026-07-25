@@ -3,14 +3,14 @@
  * happened, see the delta, adjust — the plan is a hypothesis, not a contract.
  */
 import { addDays, format, parseISO } from 'date-fns'
-import { ChevronLeft, ChevronRight, Plus, SlidersHorizontal } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react'
 import { useState } from 'react'
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
 import { weekStartFor, type Project } from '@/domain/time'
 import { addDaysISO, todayISO } from '@/lib/date'
 import { useTimeStore } from '@/store/timeProjects'
-import { Button, Segmented, Select } from '@/ui'
+import { Button, ConfirmDialog, Segmented, Select } from '@/ui'
 import type { ViewMode } from './OptionsPopover'
 import { ProjectEditor } from './ProjectEditor'
 import { ProjectSidebar } from './ProjectSidebar'
@@ -31,6 +31,7 @@ type ZoomKey = (typeof ZOOMS)[number]['value']
 export default function TimePage() {
   const today = todayISO()
   const settings = useTimeStore((s) => s.settings)
+  const resetAll = useTimeStore((s) => s.resetAll)
   const [cursor, setCursor] = useState(today)
   const [zoom, setZoom] = useState<ZoomKey>('1h')
   const [mode, setMode] = useState<ViewMode>('both')
@@ -39,6 +40,7 @@ export default function TimePage() {
   const [editing, setEditing] = useState<Project | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [qualitiesOpen, setQualitiesOpen] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
 
   const weekStart = weekStartFor(cursor, settings.weekStart)
   const { data, now } = useWeekData(weekStart)
@@ -54,6 +56,9 @@ export default function TimePage() {
         subtitle="Plan the week, live it, record what actually happened — the gap is data, never failure."
         actions={
           <>
+            <Button variant="outline" onClick={() => setConfirmReset(true)}>
+              <RotateCcw className="size-4" /> Reset
+            </Button>
             <Button variant="outline" onClick={() => setQualitiesOpen(true)}>
               <SlidersHorizontal className="size-4" /> Qualities
             </Button>
@@ -154,6 +159,21 @@ export default function TimePage() {
 
       <ProjectEditor project={editing} open={editorOpen} onOpenChange={setEditorOpen} />
       <QualityEditor open={qualitiesOpen} onOpenChange={setQualitiesOpen} />
+      <ConfirmDialog
+        open={confirmReset}
+        onOpenChange={setConfirmReset}
+        title="Reset to demo?"
+        description="This replaces all your projects, rules, and blocks with the original demo week. This can't be undone."
+        confirmLabel="Reset to demo"
+        danger
+        onConfirm={() => {
+          resetAll()
+          setSelected(null)
+          setEditing(null)
+          setEditorOpen(false)
+          setCursor(today)
+        }}
+      />
     </Page>
   )
 }
