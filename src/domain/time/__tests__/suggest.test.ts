@@ -112,8 +112,8 @@ describe('resolveFrShares', () => {
     const phone = mkProject({ id: 'phone', code: 'ent-phone', fr: { share: 3, scope: 'parent' } })
     const other = mkProject({ id: 'other', fr: { share: 2, scope: 'global' } })
     const allocs = resolveFrShares([ent, tv, phone, other], 1000)
-    // ent takes 500 of the pool, and its children split that pie 1:3
-    expect(allocs.get('ent')).toBeUndefined()
+    // ent takes 500 of the pool (recorded for display), and its children split that pie 1:3
+    expect(allocs.get('ent')).toBeCloseTo(500, 5)
     expect(allocs.get('tv')).toBeCloseTo(125, 5)
     expect(allocs.get('phone')).toBeCloseTo(375, 5)
     expect(allocs.get('other')).toBeCloseTo(500, 5)
@@ -125,6 +125,7 @@ describe('resolveFrShares', () => {
     const phone = mkProject({ id: 'phone', code: 'ent-screen-phone', fr: { share: 1, scope: 'family' } })
     const read = mkProject({ id: 'read', code: 'ent-read', fr: { share: 3, scope: 'family' } })
     const allocs = resolveFrShares([ent, screen, phone, read], 800)
+    expect(allocs.get('ent')).toBeCloseTo(800, 5)
     expect(allocs.get('phone')).toBeCloseTo(200, 5)
     expect(allocs.get('read')).toBeCloseTo(600, 5)
   })

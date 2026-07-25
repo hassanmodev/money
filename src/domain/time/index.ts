@@ -42,6 +42,8 @@ export interface WeekData {
   progress: Map<ProjectId, BudgetProgress>
   suggestions: Suggestion[]
   unfit: UnfitReport[]
+  /** resolved free-pool minutes per `fr` project this week */
+  frAllocs: Map<ProjectId, number>
   signals: Signal[]
   /** scorer context for the viewed week — options lists, slot-fit glows, drag whispers */
   scoreCtx: ScoreContext
@@ -96,7 +98,7 @@ export function computeWeek(
     if (bp) progress.set(p.id, bp)
   }
 
-  const { suggestions, unfit }: SuggestResult = suggestWeek(state, weekStart, now)
+  const { suggestions, unfit, frAllocs }: SuggestResult = suggestWeek(state, weekStart, now)
 
   return {
     weekStart,
@@ -109,6 +111,7 @@ export function computeWeek(
     progress,
     suggestions,
     unfit,
+    frAllocs,
     signals: allSignals(state, weekStart, simPlan, now.date),
     scoreCtx,
   }

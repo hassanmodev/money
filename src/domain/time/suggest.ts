@@ -47,6 +47,8 @@ export interface UnfitReport {
 export interface SuggestResult {
   suggestions: Suggestion[]
   unfit: UnfitReport[]
+  /** resolved free-pool minutes per `fr` project (after budgeted claims) */
+  frAllocs: Map<ProjectId, number>
 }
 
 const hours = (min: number) => Math.round(min / 6) / 10
@@ -59,6 +61,19 @@ const hours = (min: number) => Math.round(min / 6) / 10
  * A project whose container has no `fr` share to split falls back to the
  * global pool, so shares never vanish silently.
  */
+/** Kids that claim this project's pie instead of the project itself. */
+function frHeirs(projects: Project[], p: Project): Project[] {
+  const parentKids = childrenOf(projects, p).filter(
+    (k) => k.fr?.scope === 'parent' && !k.archived && k.fr.share > 0,
+  )
+  if (parentKids.length > 0) return parentKids
+  // a family root's share feeds descendants claiming the family pie
+  if (parentOf(projects, p)) return []
+  return descendantsOf(projects, p).filter(
+    (d) => d.fr?.scope === 'family' && !d.archived && d.fr.share > 0,
+  )
+}
+
 export function resolveFrShares(projects: Project[], poolMin: number): Map<ProjectId, number> {
   const out = new Map<ProjectId, number>()
   const withFr = projects.filter((p) => p.fr && !p.archived && p.fr.share > 0)
@@ -69,23 +84,10 @@ export function resolveFrShares(projects: Project[], poolMin: number): Map<Proje
     if (total <= 0 || pool <= 0) return
     for (const c of claimants) {
       const share = (pool * (c.fr?.share ?? 0)) / total
-      // children claiming the direct parent's share split it instead
-      const parentKids = childrenOf(projects, c).filter(
-        (k) => k.fr?.scope === 'parent' && !k.archived && k.fr.share > 0,
-      )
-      // a family root's share feeds descendants claiming the family pie
-      const familyMembers = parentOf(projects, c)
-        ? []
-        : descendantsOf(projects, c).filter(
-            (d) => d.fr?.scope === 'family' && !d.archived && d.fr.share > 0,
-          )
-      if (parentKids.length > 0) {
-        allocate(share, parentKids)
-      } else if (familyMembers.length > 0) {
-        allocate(share, familyMembers)
-      } else {
-        out.set(c.id, (out.get(c.id) ?? 0) + share)
-      }
+      // always record the pie size (parents show hrs even when kids split it)
+      out.set(c.id, (out.get(c.id) ?? 0) + share)
+      const heirs = frHeirs(projects, c)
+      if (heirs.length > 0) allocate(share, heirs)
     }
   }
 
@@ -246,7 +248,7 @@ export function suggestWeek(
   now: { date: ISODate; minute: number },
 ): SuggestResult {
   const ctx = buildScoreContext(state, weekStart, now)
-  const empty: SuggestResult = { suggestions: [], unfit: [] }
+  const empty: SuggestResult = { suggestions: [], unfit: [], frAllocs: new Map() }
   if (ctx.firstOpenSlot >= SLOTS_PER_WEEK) return empty
 
   const byId = new Map(state.projects.map((p) => [p.id, p]))
@@ -310,7 +312,8 @@ export function suggestWeek(
   const frAllocs = resolveFrShares(state.projects, pool)
   for (const [projectId, minutes] of frAllocs) {
     const p = byId.get(projectId)
-    if (!p || minutes < STEP_MIN) continue
+    // containers only hold a pie for heirs — place on the heirs, not twice
+    if (!p || minutes < STEP_MIN || frHeirs(state.projects, p).length > 0) continue
     const r = placeSessions(w, p, Math.floor(minutes / STEP_MIN) * STEP_MIN, {
       threshold: ACCEPT_THRESHOLD,
       // fr filler without its own session shape spreads in day-sized chunks
@@ -322,5 +325,5 @@ export function suggestWeek(
     }
   }
 
-  return { suggestions, unfit }
+  return { suggestions, unfit, frAllocs }
 }

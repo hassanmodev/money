@@ -26,6 +26,7 @@ import { fmtHours } from './format'
 export function ProjectSidebar({
   projects,
   progress,
+  frAllocs,
   unfit,
   signals,
   selectedId,
@@ -36,6 +37,7 @@ export function ProjectSidebar({
 }: {
   projects: Project[]
   progress: Map<string, BudgetProgress>
+  frAllocs: Map<string, number>
   unfit: UnfitReport[]
   signals: Signal[]
   selectedId: string | null
@@ -66,6 +68,7 @@ export function ProjectSidebar({
           depth={0}
           projects={projects}
           progress={progress}
+          frAllocs={frAllocs}
           unfit={unfit}
           signals={signals}
           selectedId={selectedId}
@@ -85,6 +88,7 @@ function ProjectRow({
   depth,
   projects,
   progress,
+  frAllocs,
   unfit,
   signals,
   selectedId,
@@ -95,6 +99,7 @@ function ProjectRow({
   depth: number
   projects: Project[]
   progress: Map<string, BudgetProgress>
+  frAllocs: Map<string, number>
   unfit: UnfitReport[]
   signals: Signal[]
   selectedId: string | null
@@ -104,6 +109,7 @@ function ProjectRow({
   const p = node.project
   const color = projectColor(projects, p)
   const prog = progress.get(p.id)
+  const frMin = frAllocs.get(p.id)
   const unfitReport = unfit.find((u) => u.projectId === p.id)
   const projectSignals = signals.filter((s) => s.projectId === p.id)
 
@@ -129,7 +135,11 @@ function ProjectRow({
             <span className={cn('truncate text-sm', selectedId === p.id ? 'text-ink' : 'text-muted')}>
               {p.name}
             </span>
-            {p.fr && <span className="shrink-0 text-[10px] text-faint">{p.fr.share}fr</span>}
+            {p.fr && (
+              <span className="shrink-0 tabular text-[10px] text-faint">
+                {p.fr.share}fr{frMin != null ? ` · ${fmtHours(frMin / 7)}/d` : ''}
+              </span>
+            )}
             {projectSignals.map((s, i) => (
               <Tooltip key={i} content={s.message}>
                 <span className={cn('size-1.5 shrink-0 rounded-full', s.severity === 'warn' ? 'bg-honey' : 'bg-ghost')} />
@@ -164,6 +174,7 @@ function ProjectRow({
           depth={depth + 1}
           projects={projects}
           progress={progress}
+          frAllocs={frAllocs}
           unfit={unfit}
           signals={signals}
           selectedId={selectedId}

@@ -124,6 +124,7 @@ export default function TimePage() {
           <ProjectSidebar
             projects={data.scoreCtx.projects}
             progress={data.progress}
+            frAllocs={data.frAllocs}
             unfit={data.unfit}
             signals={data.signals}
             selectedId={selected}
