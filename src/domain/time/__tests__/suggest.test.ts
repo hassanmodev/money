@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveFrShares, suggestWeek } from '../suggest'
-import { mkProject, mkQuality, mkState, NOW_BEFORE, WEEK } from './fixtures'
+import { mkBlock, mkProject, mkQuality, mkState, NOW_BEFORE, WEEK } from './fixtures'
 
 const flatQualities = [mkQuality({ id: 'mental' })]
 
@@ -143,5 +143,22 @@ describe('suggestWeek — fr placement', () => {
     const bMin = sum(suggestions, 'b')
     expect(aMin).toBeGreaterThan(2000)
     expect(bMin / aMin).toBeCloseTo(3, 1)
+  })
+
+  it('shrinks fr chunks when an 8h bite no longer fits', () => {
+    // each day occupied 0:00–21:00 — only 3h evening gaps remain
+    const sleep = mkProject({ id: 'sleep', dim: true })
+    const filler = mkProject({ id: 'filler', fr: { share: 1, scope: 'global' } })
+    const days = ['2026-01-05', '2026-01-06', '2026-01-07', '2026-01-08', '2026-01-09', '2026-01-10', '2026-01-11']
+    const blocks = days.map((date, i) =>
+      mkBlock({ id: `occ-${i}`, projectId: 'sleep', date, startMin: 0, durationMin: 21 * 60 }),
+    )
+    const { suggestions, unfit } = suggestWeek(
+      mkState({ qualities: flatQualities, projects: [sleep, filler], blocks }),
+      WEEK,
+      NOW_BEFORE,
+    )
+    expect(sum(suggestions, 'filler')).toBe(7 * 3 * 60)
+    expect(unfit.filter((u) => u.projectId === 'filler')).toHaveLength(0)
   })
 })

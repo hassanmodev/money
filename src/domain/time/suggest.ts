@@ -141,6 +141,10 @@ const resimulate = (w: Working) => {
  * Greedily place `minutes` for a project at its best-scoring open slots.
  * Returns what wouldn't fit and why. Every placed session becomes part of the
  * landscape for the next one (occupancy, budget room, spread, quality drift).
+ *
+ * Prefers large chunks (up to `sessionCap` / `sessionMax`), but when a size
+ * won't fit it halves and retries — otherwise fr leftovers die as "unfit"
+ * while smaller open runs still exist.
  */
 function placeSessions(
   w: Working,
@@ -152,14 +156,17 @@ function placeSessions(
   let remaining = minutes
   let reasons: string[] = []
   const { sessionMin, sessionMax } = project.budget ?? {}
-  const cap = sessionMax ?? opts.sessionCap
+  const preferred = sessionMax ?? opts.sessionCap
+  const floor = sessionMin ?? STEP_MIN
+  let maxChunk = preferred ?? minutes
+  let sessions = 0
 
-  for (let n = 0; n < MAX_SESSIONS_PER_PROJECT && remaining >= STEP_MIN; n++) {
-    const len = Math.max(STEP_MIN, Math.min(cap ?? remaining, remaining))
+  while (sessions < MAX_SESSIONS_PER_PROJECT && remaining >= STEP_MIN) {
     if (sessionMin && remaining < sessionMin) {
       reasons = [`needs at least ${hours(sessionMin)}h per sitting`]
       break
     }
+    const len = Math.max(floor, Math.min(maxChunk, remaining))
     const span = Math.max(1, Math.round(len / STEP_MIN))
 
     let bestSlot = -1
@@ -174,6 +181,12 @@ function placeSessions(
       }
     }
     if (bestSlot < 0 || bestScore < opts.threshold) {
+      // shrink and retry — don't burn a session slot on a size that won't fit
+      const smaller = Math.floor(len / 2 / STEP_MIN) * STEP_MIN
+      if (smaller >= floor && smaller < len) {
+        maxChunk = smaller
+        continue
+      }
       reasons =
         bestScore <= 0
           ? ['no open slots left']
@@ -214,6 +227,9 @@ function placeSessions(
     }
     if (project.effects.length) resimulate(w)
     remaining -= len
+    sessions++
+    // prefer large chunks again whenever a longer open run appears
+    maxChunk = preferred ?? remaining
   }
 
   return { placed, missingMin: Math.max(0, remaining), reasons }
