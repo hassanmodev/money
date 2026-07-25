@@ -1,4 +1,4 @@
-import { Boxes, LayoutGrid, LineChart, Receipt, Settings, Target, type LucideIcon } from 'lucide-react'
+import { Boxes, CalendarDays, LayoutGrid, LineChart, Receipt, Settings, Target, type LucideIcon } from 'lucide-react'
 
 export interface NavItemDef {
   to: string
@@ -8,6 +8,7 @@ export interface NavItemDef {
 }
 
 export const NAV: NavItemDef[] = [
+  { to: '/time', label: 'Time', icon: CalendarDays },
   { to: '/', label: 'Overview', icon: LayoutGrid, end: true },
   { to: '/boxes', label: 'Boxes', icon: Boxes },
   { to: '/planning', label: 'Planning', icon: LineChart },

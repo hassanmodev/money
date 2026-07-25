@@ -8,6 +8,7 @@ import PlanningPage from '@/features/planning/PlanningPage'
 import GoalsPage from '@/features/goals/GoalsPage'
 import ActivityPage from '@/features/transactions/ActivityPage'
 import SettingsPage from '@/features/settings/SettingsPage'
+import TimePage from '@/features/time/TimePage'
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
           <Routes>
             <Route element={<AppShell />}>
               <Route path="/" element={<OverviewPage />} />
+              <Route path="/time" element={<TimePage />} />
               <Route path="/boxes" element={<BoxesPage />} />
               <Route path="/planning" element={<PlanningPage />} />
               <Route path="/goals" element={<GoalsPage />} />
