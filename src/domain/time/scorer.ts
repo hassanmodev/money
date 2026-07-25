@@ -181,7 +181,8 @@ export function scorePlacement(
     reqScore = Math.max(0, reqScore)
   }
 
-  // ── budget room (20): nothing left to claim scores low; honours the family pie ──
+  // ── budget room (20): nothing left to claim is a hard no (daily budgets
+  // especially — one filled day must not keep absorbing the week's claim)
   let budgetScore = 10
   if (project.budget) {
     const b = project.budget
@@ -189,24 +190,26 @@ export function scorePlacement(
       budgetScore = 12 // never placed by suggestion, but logging is allowed
     } else {
       // budget room is judged against the period covering the candidate slot,
-      // so monthly/custom windows stay correct at month boundaries
+      // so monthly/custom/daily windows stay correct at their boundaries
       const room = budgetRoomMin(
         { projects: ctx.projects, blocks: ctx.planBlocks, fragments: ctx.fragments, settings: ctx.settings },
         project,
         slotToDateMinute(sim.weekStart, startSlot).date,
       )
-      if (room <= 0) {
-        budgetScore = 0
+      if (room < durationMin) {
         const parent = parentOf(ctx.projects, project)
-        reasons.push(
-          parent?.budget ? `the ${parent.name} budget is spent` : 'budget already used up',
-        )
-      } else if (room < durationMin) {
-        budgetScore = 14
-        reasons.push(`only ${Math.round(room / 6) / 10}h left in the budget`)
-      } else {
-        budgetScore = 20
+        return {
+          value: 0,
+          reasons: [
+            room <= 0
+              ? parent?.budget
+                ? `the ${parent.name} budget is spent`
+                : 'budget already used up'
+              : `only ${Math.round(room / 6) / 10}h left in the budget`,
+          ],
+        }
       }
+      budgetScore = 20
     }
   } else if (project.fr) {
     budgetScore = 16 // fr projects draw from the free pool

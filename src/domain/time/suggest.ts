@@ -4,6 +4,7 @@
  * budgeted projects claim their hours, then `fr` shares split what's left
  * CSS-style. What doesn't fit is reported, never silently crammed.
  */
+import { addDays, format, parseISO } from 'date-fns'
 import { budgetRoomMin, periodWindow, planUsageMinutes } from './budgets'
 import { childrenOf, descendantsOf, parentOf } from './codes'
 import { buildScoreContext, scorePlacement, type ScoreContext } from './scorer'
@@ -273,30 +274,64 @@ export function suggestWeek(
   // Budget windows are judged inside the viewed week — when planning ahead,
   // "now" sits outside it and would point at the wrong period.
   const weekRef = now.date >= weekStart ? now.date : weekStart
-  const roomOf = (p: Project) =>
-    budgetRoomMin({ projects: state.projects, blocks: w.planBlocks, fragments: state.fragments, settings: state.settings }, p, weekRef)
+  const budgetState = () => ({
+    projects: state.projects,
+    blocks: w.planBlocks,
+    fragments: state.fragments,
+    settings: state.settings,
+  })
+  /** Minutes to claim this week. Daily budgets sum each open day's remaining. */
+  const claimOf = (p: Project): number => {
+    const b = p.budget!
+    if (b.period.kind === 'day') {
+      let total = 0
+      for (let i = 0; i < 7; i++) {
+        const day = format(addDays(parseISO(weekStart), i), 'yyyy-MM-dd')
+        if (day < weekRef) continue // past days don't roll over
+        total += Math.min(budgetRoomMin(budgetState(), p, day), b.min)
+      }
+      return total
+    }
+    return Math.min(budgetRoomMin(budgetState(), p, weekRef), b.min)
+  }
   const claimants = state.projects
     .filter((p) => !p.archived && p.budget && p.budget.intent !== 'minimize')
-    .map((p) => ({ p, room: roomOf(p) }))
+    .map((p) => ({ p, room: claimOf(p) }))
     .filter((c) => c.room >= STEP_MIN)
     .sort(
       (a, b) =>
         b.p.requires.length - a.p.requires.length || b.room - a.room || a.p.name.localeCompare(b.p.name),
     )
 
-  for (const { p, room } of claimants) {
-    const target = Math.min(room, p.budget!.min)
-    const r = placeSessions(w, p, target, { threshold: ACCEPT_THRESHOLD })
+  for (const { p, room: target } of claimants) {
+    // daily budgets place one sitting per day — don't cram the week into one block
+    const sessionCap =
+      p.budget!.period.kind === 'day' ? (p.budget!.sessionMax ?? p.budget!.min) : undefined
+    const r = placeSessions(w, p, target, { threshold: ACCEPT_THRESHOLD, sessionCap })
     suggestions.push(...r.placed)
 
     // elastic maximize: propose growth toward the cap while slots still look productive
     const missing = r.missingMin
     if (p.budget!.intent === 'maximize' && missing < target) {
-      const window = periodWindow(p.budget!.period, weekRef, state.settings.weekStart)
-      const plannedNow = planUsageMinutes(p.id, w.planBlocks, window)
-      const growthRoom = Math.max(0, p.budget!.max - plannedNow)
+      let growthRoom = 0
+      if (p.budget!.period.kind === 'day') {
+        for (let i = 0; i < 7; i++) {
+          const day = format(addDays(parseISO(weekStart), i), 'yyyy-MM-dd')
+          if (day < weekRef) continue
+          const planned = planUsageMinutes(p.id, w.planBlocks, { from: day, to: day })
+          growthRoom += Math.max(0, p.budget!.max - Math.max(planned, p.budget!.min))
+        }
+      } else {
+        const window = periodWindow(p.budget!.period, weekRef, state.settings.weekStart)
+        const plannedNow = planUsageMinutes(p.id, w.planBlocks, window)
+        growthRoom = Math.max(0, p.budget!.max - plannedNow)
+      }
       if (growthRoom >= STEP_MIN) {
-        const g = placeSessions(w, p, growthRoom, { elastic: true, threshold: GROWTH_THRESHOLD })
+        const g = placeSessions(w, p, growthRoom, {
+          elastic: true,
+          threshold: GROWTH_THRESHOLD,
+          sessionCap,
+        })
         suggestions.push(...g.placed)
       }
     }

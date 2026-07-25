@@ -48,6 +48,20 @@ describe('suggestWeek — budget claims', () => {
     expect(list.every((s) => s.durationMin === 30)).toBe(true)
   })
 
+  it('daily budgets claim each open day — not a single block for the week', () => {
+    const focus = budgeted('focus', { min: 60, max: 60, period: { kind: 'day' } })
+    const { suggestions, unfit } = suggestWeek(
+      mkState({ qualities: flatQualities, projects: [focus] }),
+      WEEK,
+      NOW_BEFORE,
+    )
+    const list = suggestions.filter((s) => s.projectId === 'focus')
+    expect(sum(suggestions, 'focus')).toBe(7 * 60)
+    expect(list).toHaveLength(7)
+    expect(new Set(list.map((s) => s.date)).size).toBe(7)
+    expect(unfit).toHaveLength(0)
+  })
+
   it('says so when it doesn’t fit — never silently crams', () => {
     const hog = budgeted('hog', { min: 200 * 60, max: 200 * 60, sessionMax: 480 })
     const { unfit } = suggestWeek(
