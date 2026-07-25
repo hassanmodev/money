@@ -13,6 +13,7 @@ import { useMemo } from 'react'
 import {
   projectColor,
   rollupTree,
+  type Block,
   type BudgetProgress,
   type Project,
   type ProjectNode,
@@ -27,6 +28,7 @@ export function ProjectSidebar({
   projects,
   progress,
   frAllocs,
+  planBlocks,
   unfit,
   signals,
   selectedId,
@@ -38,6 +40,8 @@ export function ProjectSidebar({
   projects: Project[]
   progress: Map<string, BudgetProgress>
   frAllocs: Map<string, number>
+  /** current week's plan layer — used to surface recurring-rule hours next to the name */
+  planBlocks: Block[]
   unfit: UnfitReport[]
   signals: Signal[]
   selectedId: string | null
@@ -47,6 +51,15 @@ export function ProjectSidebar({
   className?: string
 }) {
   const tree = useMemo(() => rollupTree(projects), [projects])
+  /** weekly minutes stamped by typed rules, per project */
+  const ruleMinByProject = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const b of planBlocks) {
+      if (b.origin !== 'rule') continue
+      m.set(b.projectId, (m.get(b.projectId) ?? 0) + b.durationMin)
+    }
+    return m
+  }, [planBlocks])
 
   return (
     <aside className={cn('flex min-w-0 flex-col gap-1', className)}>
@@ -69,6 +82,7 @@ export function ProjectSidebar({
           projects={projects}
           progress={progress}
           frAllocs={frAllocs}
+          ruleMinByProject={ruleMinByProject}
           unfit={unfit}
           signals={signals}
           selectedId={selectedId}
@@ -89,6 +103,7 @@ function ProjectRow({
   projects,
   progress,
   frAllocs,
+  ruleMinByProject,
   unfit,
   signals,
   selectedId,
@@ -100,6 +115,7 @@ function ProjectRow({
   projects: Project[]
   progress: Map<string, BudgetProgress>
   frAllocs: Map<string, number>
+  ruleMinByProject: Map<string, number>
   unfit: UnfitReport[]
   signals: Signal[]
   selectedId: string | null
@@ -110,8 +126,13 @@ function ProjectRow({
   const color = projectColor(projects, p)
   const prog = progress.get(p.id)
   const frMin = frAllocs.get(p.id)
+  const ruleMin = ruleMinByProject.get(p.id) ?? 0
   const unfitReport = unfit.find((u) => u.projectId === p.id)
   const projectSignals = signals.filter((s) => s.projectId === p.id)
+  const meta = [
+    p.fr ? `${p.fr.share}fr${frMin != null ? ` · ${fmtHours(frMin / 7)}/d` : ''}` : null,
+    ruleMin > 0 ? `${fmtHours(ruleMin / 7)}/d` : null,
+  ].filter(Boolean)
 
   return (
     <>
@@ -135,10 +156,8 @@ function ProjectRow({
             <span className={cn('truncate text-sm', selectedId === p.id ? 'text-ink' : 'text-muted')}>
               {p.name}
             </span>
-            {p.fr && (
-              <span className="shrink-0 tabular text-[10px] text-faint">
-                {p.fr.share}fr{frMin != null ? ` · ${fmtHours(frMin / 7)}/d` : ''}
-              </span>
+            {meta.length > 0 && (
+              <span className="shrink-0 tabular text-[10px] text-faint">{meta.join(' · ')}</span>
             )}
             {projectSignals.map((s, i) => (
               <Tooltip key={i} content={s.message}>
@@ -175,6 +194,7 @@ function ProjectRow({
           projects={projects}
           progress={progress}
           frAllocs={frAllocs}
+          ruleMinByProject={ruleMinByProject}
           unfit={unfit}
           signals={signals}
           selectedId={selectedId}

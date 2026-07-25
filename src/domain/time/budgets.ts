@@ -8,6 +8,7 @@
  */
 import { addDays, format, parseISO } from 'date-fns'
 import { descendantsOf, parentOf } from './codes'
+import { expandRules } from './rules'
 import {
   DAY_MIN,
   type Block,
@@ -187,21 +188,38 @@ export interface BudgetProgress {
 }
 
 /**
+ * Plan blocks for budget accounting. When `rules` is present, expand them for
+ * the window (and drop any already-injected rule blocks to avoid double-count).
+ * Callers that already merged expansions into `blocks` can omit `rules`.
+ */
+function planBlocksForBudget(
+  state: Pick<TimeState, 'projects' | 'blocks'> & Partial<Pick<TimeState, 'rules'>>,
+  window: PeriodWindow,
+): Block[] {
+  if (!state.rules) return state.blocks
+  const manual = state.blocks.filter((b) => b.origin !== 'rule')
+  return [...manual, ...expandRules(state.rules, state.projects, window.from, window.to)]
+}
+
+/**
  * Progress for a project's budget as of `ref`. A parent's budget aggregates
  * its whole family — the cap limits the children's combined total.
+ * Typed recurring rules count toward plan minutes like manual plan blocks.
  */
 export function budgetProgress(
-  state: Pick<TimeState, 'projects' | 'blocks' | 'fragments' | 'settings'>,
+  state: Pick<TimeState, 'projects' | 'blocks' | 'fragments' | 'settings'> &
+    Partial<Pick<TimeState, 'rules'>>,
   project: Project,
   ref: ISODate,
 ): BudgetProgress | undefined {
   const budget = project.budget
   if (!budget) return undefined
   const window = periodWindow(budget.period, ref, state.settings.weekStart)
+  const blocks = planBlocksForBudget(state, window)
   const hasKids = descendantsOf(state.projects, project).length > 0
   const usage = hasKids
-    ? familyUsageOf(state.projects, project, state.blocks, state.fragments, window)
-    : usageOf(project.id, state.blocks, state.fragments, window)
+    ? familyUsageOf(state.projects, project, blocks, state.fragments, window)
+    : usageOf(project.id, blocks, state.fragments, window)
   return {
     window,
     intent: budget.intent,
@@ -218,7 +236,8 @@ export function budgetProgress(
  * smaller of its own remaining budget and any budgeted ancestor's remaining.
  */
 export function budgetRoomMin(
-  state: Pick<TimeState, 'projects' | 'blocks' | 'fragments' | 'settings'>,
+  state: Pick<TimeState, 'projects' | 'blocks' | 'fragments' | 'settings'> &
+    Partial<Pick<TimeState, 'rules'>>,
   project: Project,
   ref: ISODate,
 ): number {

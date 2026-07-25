@@ -82,7 +82,10 @@ export function ProjectEditor({
   const addProject = useTimeStore((s) => s.addProject)
   const updateProject = useTimeStore((s) => s.updateProject)
   const removeProject = useTimeStore((s) => s.removeProject)
+  const addRule = useTimeStore((s) => s.addRule)
   const [draft, setDraft] = useState<Draft>(() => draftOf(project))
+  /** Rules typed while creating — committed with the new project on save. */
+  const [pendingRules, setPendingRules] = useState<string[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const [prev, setPrev] = useState({ open, project })
@@ -90,6 +93,7 @@ export function ProjectEditor({
     setPrev({ open, project })
     if (open) {
       setDraft(draftOf(project))
+      setPendingRules([])
       setConfirmDelete(false)
     }
   }
@@ -123,7 +127,10 @@ export function ProjectEditor({
       archived: project?.archived,
     }
     if (project) updateProject(project.id, out)
-    else addProject(out)
+    else {
+      const id = addProject(out)
+      for (const text of pendingRules) addRule(id, text)
+    }
     onOpenChange(false)
   }
 
@@ -316,8 +323,12 @@ export function ProjectEditor({
           )}
         />
 
-        {/* ── typed rules (existing projects only) ── */}
-        {project && <RuleList projectId={project.id} />}
+        {/* ── typed rules — draft until save when creating ── */}
+        <RuleList
+          projectId={project?.id}
+          pending={pendingRules}
+          onPendingChange={setPendingRules}
+        />
 
         <Field label="Note">
           <Textarea value={draft.note} onChange={(e) => set('note', e.target.value)} placeholder="What is this for?" />
@@ -390,17 +401,34 @@ function QualityRows<T extends { quality: string }>({
 }
 
 /** Typed rules stamp repetition — live-parse each line as it's edited. */
-function RuleList({ projectId }: { projectId: string }) {
+function RuleList({
+  projectId,
+  pending,
+  onPendingChange,
+}: {
+  /** undefined while creating — rules stay in `pending` until the project is saved */
+  projectId?: string
+  pending: string[]
+  onPendingChange: (rules: string[]) => void
+}) {
   const rules = useTimeStore((s) => s.rules)
   const addRule = useTimeStore((s) => s.addRule)
   const updateRule = useTimeStore((s) => s.updateRule)
   const removeRule = useTimeStore((s) => s.removeRule)
   const [text, setText] = useState('')
-  const mine = rules.filter((r) => r.projectId === projectId)
+  const mine = projectId ? rules.filter((r) => r.projectId === projectId) : []
   const parsed = text.trim() ? parseRule(text) : null
 
+  const commit = () => {
+    if (!parsed?.ok) return
+    const next = text.trim()
+    if (projectId) addRule(projectId, next)
+    else onPendingChange([...pending, next])
+    setText('')
+  }
+
   return (
-    <Field label="Recurring rules" hint={'Small text rules — "mon–fri 9–17", "first sat 14:00 for 2h". Generated blocks stay draggable.'}>
+    <Field label="Recurring rules" hint={'Small text rules — "mon–fri 9–17", "daily 1-5", "first sat 14:00 for 2h". Generated blocks stay draggable and count toward budgets.'}>
       <div className="flex flex-col gap-2">
         {mine.map((r) => {
           const p = parseRule(r.text)
@@ -423,28 +451,44 @@ function RuleList({ projectId }: { projectId: string }) {
             </div>
           )
         })}
+        {pending.map((r, i) => {
+          const p = parseRule(r)
+          return (
+            <div key={`pending-${i}`} className="flex items-center gap-2">
+              <Input
+                defaultValue={r}
+                onBlur={(e) => {
+                  const v = e.target.value.trim()
+                  if (!v || !parseRule(v).ok) return
+                  onPendingChange(pending.map((x, j) => (j === i ? v : x)))
+                }}
+                className="h-9 flex-1"
+              />
+              <span className={cn('w-32 truncate text-xs', p.ok ? 'text-sage' : 'text-rust')}>
+                {p.ok ? describeRule(p.rule) : "won't parse"}
+              </span>
+              <button
+                type="button"
+                onClick={() => onPendingChange(pending.filter((_, j) => j !== i))}
+                aria-label="Delete rule"
+                className="rounded-lg p-1 text-faint hover:text-rust"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </div>
+          )
+        })}
         <div className="flex items-center gap-2">
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="sat 10-12"
+            placeholder="daily 1-5"
             className="h-9 flex-1"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && parsed?.ok) {
-                addRule(projectId, text)
-                setText('')
-              }
+              if (e.key === 'Enter') commit()
             }}
           />
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!parsed?.ok}
-            onClick={() => {
-              addRule(projectId, text)
-              setText('')
-            }}
-          >
+          <Button size="sm" variant="outline" disabled={!parsed?.ok} onClick={commit}>
             <Plus className="size-4" /> Rule
           </Button>
         </div>

@@ -125,6 +125,7 @@ export default function TimePage() {
             projects={data.scoreCtx.projects}
             progress={data.progress}
             frAllocs={data.frAllocs}
+            planBlocks={data.planBlocks}
             unfit={data.unfit}
             signals={data.signals}
             selectedId={selected}

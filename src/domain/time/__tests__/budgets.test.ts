@@ -8,7 +8,7 @@ import {
   periodWindow,
   weekStartFor,
 } from '../budgets'
-import { mkBlock, mkFragment, mkProject, mkState, WEEK } from './fixtures'
+import { mkBlock, mkFragment, mkProject, mkRule, mkState, WEEK } from './fixtures'
 
 describe('weekStartFor', () => {
   it('finds the Monday of a week by default', () => {
@@ -131,5 +131,20 @@ describe('budgetProgress', () => {
     expect(p.family).toBe(true)
     expect(p.planMin).toBe(300)
     expect(p.targetMin).toBe(600)
+  })
+
+  it('counts typed recurring rules toward plan minutes', () => {
+    const sleep = mkProject({
+      id: 'sleep',
+      budget: { min: 2100, max: 2100, intent: 'target', period: { kind: 'week' }, spread: 'any' },
+    })
+    // daily 1-5 → 4h × 7 days = 1680 plan minutes
+    const state = mkState({
+      projects: [sleep],
+      rules: [mkRule({ id: 'r1', projectId: 'sleep', text: 'daily 1-5' })],
+    })
+    const p = budgetProgress(state, sleep, '2026-01-07')!
+    expect(p.planMin).toBe(1680)
+    expect(budgetRoomMin(state, sleep, '2026-01-07')).toBe(420)
   })
 })
