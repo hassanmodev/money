@@ -119,25 +119,24 @@ export default function TimePage() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-6 lg:flex-row">
-        <ProjectSidebar
-          className="lg:w-60 lg:shrink-0"
-          projects={data.scoreCtx.projects}
-          progress={data.progress}
-          unfit={data.unfit}
-          signals={data.signals}
-          selectedId={selected}
-          onSelect={setSelected}
-          onEdit={(p) => {
-            setEditing(p)
-            setEditorOpen(true)
-          }}
-          onNew={() => {
-            setEditing(null)
-            setEditorOpen(true)
-          }}
-        />
-        <div className="min-w-0 flex-1">
+      <div className="flex flex-col gap-6">
+        <div className="min-w-0 w-full">
+          <ProjectSidebar
+            projects={data.scoreCtx.projects}
+            progress={data.progress}
+            unfit={data.unfit}
+            signals={data.signals}
+            selectedId={selected}
+            onSelect={setSelected}
+            onEdit={(p) => {
+              setEditing(p)
+              setEditorOpen(true)
+            }}
+            onNew={() => {
+              setEditing(null)
+              setEditorOpen(true)
+            }}
+          />
           <WeekGrid
             data={data}
             now={now}

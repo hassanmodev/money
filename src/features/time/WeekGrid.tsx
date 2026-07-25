@@ -245,10 +245,11 @@ export function WeekGrid({
     })
   }
 
-  const labelEvery = pxPerHour >= 90 ? 1 : pxPerHour >= 56 ? 2 : pxPerHour >= 30 ? 3 : 6
+  // 1h zoom is ~64px/hour — label every hour; coarser zooms thin the gutter
+  const labelEvery = pxPerHour >= 56 ? 1 : pxPerHour >= 30 ? 2 : pxPerHour >= 18 ? 3 : 6
   const hourLines = `repeating-linear-gradient(to bottom, transparent 0, transparent ${pxPerHour - 1}px, var(--color-line) ${pxPerHour - 1}px, var(--color-line) ${pxPerHour}px)`
 
-  const renderBlock = (b: Block) => {
+  const renderBlock = (b: Block, colDay: number) => {
     const project = projects.find((p) => p.id === b.projectId)
     if (!project) return null
     const color = projectColor(projects, project)
@@ -256,77 +257,83 @@ export function WeekGrid({
     if ((isPlan && !showPlan) || (!isPlan && !showActual)) return null
     const isDragging = drag?.block.id === b.id
 
-    return segmentsOf(b, data.weekStart).map((seg) => (
-      <div
-        key={`${b.id}:${seg.day}`}
-        onPointerDown={(e) => onBlockDown(e, b)}
-        onPointerMove={(e) => onBlockMove(e, b)}
-        onPointerUp={(e) => onBlockUp(e, b)}
-        className={cn(
-          'absolute inset-x-1 z-10 cursor-grab touch-none select-none overflow-hidden rounded-md border px-1 py-0.5 active:cursor-grabbing',
-          isDragging && 'opacity-40',
-          selectedProjectId === b.projectId && 'ring-2 ring-ink/30',
-          project.dim && 'z-0 opacity-75',
-        )}
-        style={{
-          top: seg.start * pxPerMin,
-          height: Math.max(4, (seg.end - seg.start) * pxPerMin),
-          ...(project.dim
-            ? {
-                borderColor: hexToRgba(color, 0.3),
-                backgroundImage: `repeating-linear-gradient(45deg, ${hexToRgba(color, 0.1)} 0 5px, transparent 5px 11px)`,
-              }
-            : isPlan
-              ? { borderColor: hexToRgba(color, 0.55), backgroundColor: hexToRgba(color, 0.2) }
-              : { borderColor: color, backgroundColor: hexToRgba(color, 0.85) }),
-          borderRadius: `${seg.continuesBefore ? 0 : 6}px ${seg.continuesAfter ? 0 : 6}px ${seg.continuesAfter ? 0 : 6}px ${seg.continuesBefore ? 0 : 6}px`,
-        }}
-      >
-        {!project.dim && (seg.end - seg.start) * pxPerMin >= 16 && (
-          <div className={cn('truncate text-[11px] leading-tight', isPlan ? 'text-muted' : 'text-canvas-2 font-medium')} style={isPlan ? { color } : undefined}>
-            {seg.continuesBefore ? '↳ ' : ''}
-            {project.name}
-          </div>
-        )}
-        {!project.dim && !seg.continuesBefore && (seg.end - seg.start) * pxPerMin >= 30 && (
-          <div className={cn('truncate text-[10px] leading-tight', isPlan ? 'text-faint' : 'text-canvas-2/80')}>
-            {fmtTime(b.startMin)}–{fmtTime(b.startMin + b.durationMin)}
-            {b.note ? ` · ${b.note}` : ''}
-          </div>
-        )}
-      </div>
-    ))
+    // only paint segments that belong in this column — each day column maps all
+    // blocks, so without the filter one block clones across the whole week
+    return segmentsOf(b, data.weekStart)
+      .filter((seg) => seg.day === colDay)
+      .map((seg) => (
+        <div
+          key={`${b.id}:${seg.day}`}
+          onPointerDown={(e) => onBlockDown(e, b)}
+          onPointerMove={(e) => onBlockMove(e, b)}
+          onPointerUp={(e) => onBlockUp(e, b)}
+          className={cn(
+            'absolute inset-x-1 z-10 cursor-grab touch-none select-none overflow-hidden rounded-md border px-1 py-0.5 active:cursor-grabbing',
+            isDragging && 'opacity-40',
+            selectedProjectId === b.projectId && 'ring-2 ring-ink/30',
+            project.dim && 'z-0 opacity-75',
+          )}
+          style={{
+            top: seg.start * pxPerMin,
+            height: Math.max(4, (seg.end - seg.start) * pxPerMin),
+            ...(project.dim
+              ? {
+                  borderColor: hexToRgba(color, 0.3),
+                  backgroundImage: `repeating-linear-gradient(45deg, ${hexToRgba(color, 0.1)} 0 5px, transparent 5px 11px)`,
+                }
+              : isPlan
+                ? { borderColor: hexToRgba(color, 0.55), backgroundColor: hexToRgba(color, 0.2) }
+                : { borderColor: color, backgroundColor: hexToRgba(color, 0.85) }),
+            borderRadius: `${seg.continuesBefore ? 0 : 6}px ${seg.continuesAfter ? 0 : 6}px ${seg.continuesAfter ? 0 : 6}px ${seg.continuesBefore ? 0 : 6}px`,
+          }}
+        >
+          {!project.dim && (seg.end - seg.start) * pxPerMin >= 16 && (
+            <div className={cn('truncate text-[11px] leading-tight', isPlan ? 'text-muted' : 'text-canvas-2 font-medium')} style={isPlan ? { color } : undefined}>
+              {seg.continuesBefore ? '↳ ' : ''}
+              {project.name}
+            </div>
+          )}
+          {!project.dim && !seg.continuesBefore && (seg.end - seg.start) * pxPerMin >= 30 && (
+            <div className={cn('truncate text-[10px] leading-tight', isPlan ? 'text-faint' : 'text-canvas-2/80')}>
+              {fmtTime(b.startMin)}–{fmtTime(b.startMin + b.durationMin)}
+              {b.note ? ` · ${b.note}` : ''}
+            </div>
+          )}
+        </div>
+      ))
   }
 
-  const renderSuggestion = (s: Suggestion) => {
+  const renderSuggestion = (s: Suggestion, colDay: number) => {
     const project = projects.find((p) => p.id === s.projectId)
     if (!project || !showPlan) return null
     const color = projectColor(projects, project)
-    return segmentsOf(s, data.weekStart).map((seg) => (
-      <button
-        key={`sug:${s.projectId}:${s.date}:${s.startMin}:${seg.day}`}
-        type="button"
-        title={`${project.name} — suggested (scores ${s.score})${s.elastic ? ' · growth proposal' : ''}`}
-        onClick={(e) => {
-          e.stopPropagation()
-          addBlock({ projectId: s.projectId, layer: 'plan', date: s.date, startMin: s.startMin, durationMin: s.durationMin, origin: 'manual' })
-        }}
-        className="absolute inset-x-1 z-[5] overflow-hidden rounded-md border border-dashed px-1 py-0.5 text-left transition-colors hover:brightness-125"
-        style={{
-          top: seg.start * pxPerMin,
-          height: Math.max(4, (seg.end - seg.start) * pxPerMin),
-          borderColor: hexToRgba(color, 0.6),
-          backgroundColor: hexToRgba(color, 0.1),
-        }}
-      >
-        {(seg.end - seg.start) * pxPerMin >= 16 && (
-          <div className="truncate text-[11px] leading-tight" style={{ color }}>
-            {project.name}
-            {s.elastic ? ' ↑' : ''}
-          </div>
-        )}
-      </button>
-    ))
+    return segmentsOf(s, data.weekStart)
+      .filter((seg) => seg.day === colDay)
+      .map((seg) => (
+        <button
+          key={`sug:${s.projectId}:${s.date}:${s.startMin}:${seg.day}`}
+          type="button"
+          title={`${project.name} — suggested (scores ${s.score})${s.elastic ? ' · growth proposal' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            addBlock({ projectId: s.projectId, layer: 'plan', date: s.date, startMin: s.startMin, durationMin: s.durationMin, origin: 'manual' })
+          }}
+          className="absolute inset-x-1 z-[5] overflow-hidden rounded-md border border-dashed px-1 py-0.5 text-left transition-colors hover:brightness-125"
+          style={{
+            top: seg.start * pxPerMin,
+            height: Math.max(4, (seg.end - seg.start) * pxPerMin),
+            borderColor: hexToRgba(color, 0.6),
+            backgroundColor: hexToRgba(color, 0.1),
+          }}
+        >
+          {(seg.end - seg.start) * pxPerMin >= 16 && (
+            <div className="truncate text-[11px] leading-tight" style={{ color }}>
+              {project.name}
+              {s.elastic ? ' ↑' : ''}
+            </div>
+          )}
+        </button>
+      ))
   }
 
   return (
@@ -402,9 +409,9 @@ export function WeekGrid({
                     />
                   ))}
 
-                  {showPlan && data.planBlocks.map(renderBlock)}
-                  {showActual && data.actualBlocks.map(renderBlock)}
-                  {data.suggestions.map(renderSuggestion)}
+                  {showPlan && data.planBlocks.map((b) => renderBlock(b, d))}
+                  {showActual && data.actualBlocks.map((b) => renderBlock(b, d))}
+                  {data.suggestions.map((s) => renderSuggestion(s, d))}
 
                   {/* drag ghost */}
                   {drag?.moved &&
