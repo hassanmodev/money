@@ -11,6 +11,7 @@ import {
   PiggyBank,
   Plug,
   Repeat,
+  Scale,
   ShoppingBag,
   ShoppingCart,
   Utensils,
@@ -39,6 +40,7 @@ export const CATEGORIES: Category[] = [
   { key: 'salary', label: 'Income', icon: Banknote, color: '#9eb87f' },
   { key: 'savings', label: 'Savings', icon: PiggyBank, color: '#74b1a3' },
   { key: 'investing', label: 'Investing', icon: LineChart, color: '#8aa0c8' },
+  { key: 'adjustment', label: 'Adjustment', icon: Scale, color: '#a89ec2' },
   { key: 'other', label: 'Other', icon: Coins, color: '#b4a695' },
 ]
 

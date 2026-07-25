@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowRight, ArrowUpRight, MoreHorizontal, Pencil, Target, Trash2 } from 'lucide-react'
+import { ArrowDownRight, ArrowRight, ArrowUpRight, MoreHorizontal, Pencil, Scale, Target, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toBase, type Box, type Effect } from '@/domain'
 import { cn } from '@/lib/cn'
@@ -17,6 +17,7 @@ import {
 } from '@/ui'
 import { boxIcon, KIND_LABEL } from '@/ui/icons'
 import { EFFECT_META, toneClass } from './effect-meta'
+import { SetBalanceDialog } from './SetBalanceDialog'
 import { useBoxSeries } from './useBoxSeries'
 
 const pct = (r: number) => `${(r * 100).toFixed(2).replace(/\.?0+$/, '')}%`
@@ -39,6 +40,7 @@ export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
   const value = useBoxValue(box.id)
   const series = useBoxSeries(box)
   const [confirm, setConfirm] = useState(false)
+  const [setBalance, setSetBalance] = useState(false)
 
   const Icon = boxIcon(box)
   const baseValue = toBase(value, box.currency, settings)
@@ -93,6 +95,9 @@ export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
             <MenuItem icon={Pencil} onSelect={onEdit}>
               Edit
             </MenuItem>
+            <MenuItem icon={Scale} onSelect={() => setSetBalance(true)}>
+              Set balance
+            </MenuItem>
             <MenuItem icon={Trash2} danger onSelect={() => setConfirm(true)}>
               Delete
             </MenuItem>
@@ -145,6 +150,8 @@ export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
         danger
         onConfirm={() => removeBox(box.id)}
       />
+
+      <SetBalanceDialog box={box} open={setBalance} onOpenChange={setSetBalance} />
     </>
   )
 }
