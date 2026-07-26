@@ -5,16 +5,15 @@
  * over `addProject`.
  */
 import { useMemo, useState } from 'react'
-import { parseBulkCreate, type BulkCreate as BulkSpec } from '@/domain/time'
+import { codeLeaf, parseBulkCreate, type BulkCreate as BulkSpec } from '@/domain/time'
 import { cn } from '@/lib/cn'
 import { useTimeStore } from '@/store/timeProjects'
 import { Button, Field, Select, Sheet, Textarea } from '@/ui'
 import { fmtDur } from './format'
 
-const PLACEHOLDER = `# one line per group:  code: item, item, …
-fun: 1h, games-chess, games-fps 2h   # line default 1h/day, fps overrides with 2h/day
-fun: reads-scifi, reads-comics       # no amount → each gets 1fr of the parent's share
-fun-games: chess-blitz 30m/w         # m = minutes; /w per week, /mo per month (default /day)`
+const PLACEHOLDER = `# code Name: item, item Name "note", …
+fun-phone Phone: soc Social "x,fb", chess, vid Video "youtube,tiktok"
+fun-watch Watch: mov, ser 30m/w, "video games"`
 
 const PERIOD_LABEL = { day: '/day', week: '/week', month: '/month', custom: '' } as const
 
@@ -54,6 +53,7 @@ export function BulkCreate({
       addProject({
         name: spec.name,
         code: spec.code,
+        note: spec.note,
         budget: spec.budget,
         fr: spec.fr,
         effects: [],
@@ -95,7 +95,7 @@ export function BulkCreate({
         <Field
           label="Projects"
           hint={
-            'Each line is `code: item, item, …` — items become sub-projects of that code, and dashes nest deeper (`games-chess` → chess under games). A leading amount sets the line default; an amount after an item overrides it. Amounts are `1h` or `30m`, per day unless you add /w or /mo. Bare items get 1fr of the parent\'s share; use 2fr for a bigger slice. Missing groups are created for you, existing codes are skipped, `#` starts a comment.'
+            'Each line is `code Name: item, item, …` — items become sub-projects of that code. First word is always the code (dashes nest deeper), the rest is its display name: `soc Social`. Want a spaced name with no code of your own? Quote it — `"video games"` → video-games. A quote after a code is its note instead — commas inside are safe. Amounts are `1h` or `30m`, per day unless /w or /mo; a leading amount sets the line default, bare items get 1fr of the parent\'s share. Missing groups are created, existing codes skipped, `#` starts a comment.'
           }
         >
           <Textarea
@@ -113,7 +113,9 @@ export function BulkCreate({
             {plan.creates.map((s) => (
               <div key={s.code} className="flex items-baseline gap-2 text-sm">
                 <span className={cn('min-w-0 flex-1 truncate', s.group ? 'text-faint' : 'text-ink')}>
-                  {s.code}
+                  {s.name !== codeLeaf(s.code) ? `${s.name} · ` : ''}
+                  <span className="text-faint">{s.code}</span>
+                  {s.note ? <span className="text-faint"> · “{s.note}”</span> : null}
                 </span>
                 <span className="shrink-0 tabular text-xs text-faint">{describeSpec(s)}</span>
               </div>

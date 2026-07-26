@@ -83,8 +83,60 @@ describe('parseBulkCreate', () => {
   })
 
   it('reports errors per line without aborting the rest', () => {
-    const plan = parseBulkCreate('no colon here\nent:\nent: yt xyz\nent: ok', null, [])
+    const plan = parseBulkCreate('no colon here\nent:\nent: yt, 2h\nent: ok', null, [])
     expect(plan.errors.map((e) => e.line)).toEqual([1, 2, 3])
+    expect(plan.errors[2].message).toBe('amount without a project')
     expect(plan.creates.some((c) => c.code === 'ent-ok')).toBe(true)
+  })
+
+  it('takes a display name after the code, quoted string as note', () => {
+    const plan = parseBulkCreate('fun-phone Phone: soc Social "x,fb", vid Video 1h "yt,tik"', null, [])
+    const phone = plan.creates.find((c) => c.code === 'fun-phone')!
+    expect(phone).toMatchObject({ name: 'Phone', group: true })
+    const soc = plan.creates.find((c) => c.code === 'fun-phone-soc')!
+    expect(soc).toMatchObject({ name: 'Social', note: 'x,fb', fr: { share: 1, scope: 'parent' } })
+    const vid = plan.creates.find((c) => c.code === 'fun-phone-vid')!
+    expect(vid).toMatchObject({ name: 'Video', note: 'yt,tik' })
+    expect(vid.budget?.min).toBe(60)
+  })
+
+  it('treats a quoted item as a spaced name with a derived code', () => {
+    const plan = parseBulkCreate('fun-watch Watch: mov, ser, "Social Media"', null, [])
+    expect(plan.creates.find((c) => c.code === 'fun-watch')?.name).toBe('Watch')
+    expect(plan.creates.map((c) => c.code)).toContain('fun-watch-social-media')
+    expect(plan.creates.find((c) => c.code === 'fun-watch-social-media')?.name).toBe('Social Media')
+    // single bare words stay as they were: code leaf is the name
+    expect(plan.creates.find((c) => c.code === 'fun-watch-mov')?.name).toBe('mov')
+  })
+
+  it('never reads case: unquoted words are always code then name', () => {
+    const plan = parseBulkCreate('fun: VID Video, "Quoted Name" 2h', null, [])
+    const vid = plan.creates.find((c) => c.code === 'fun-vid')!
+    expect(vid.name).toBe('Video')
+    const quoted = plan.creates.find((c) => c.code === 'fun-quoted-name')!
+    expect(quoted).toMatchObject({ name: 'Quoted Name' })
+    expect(quoted.budget?.min).toBe(120)
+  })
+
+  it('takes a quoted header as a spaced group name', () => {
+    const plan = parseBulkCreate('"Fun Stuff": chess', null, [])
+    expect(plan.creates.find((c) => c.code === 'fun-stuff')).toMatchObject({
+      name: 'Fun Stuff',
+      group: true,
+    })
+    expect(plan.creates.map((c) => c.code)).toContain('fun-stuff-chess')
+  })
+
+  it('names a claim-only line from its header', () => {
+    const plan = parseBulkCreate('ent Entertainment "all the fun": 1h', null, [])
+    expect(plan.creates).toEqual([
+      expect.objectContaining({ code: 'ent', name: 'Entertainment', note: 'all the fun' }),
+    ])
+  })
+
+  it('flags unterminated quotes', () => {
+    const plan = parseBulkCreate('ent: yt "oops', null, [])
+    expect(plan.errors).toEqual([{ line: 1, message: 'unterminated quote' }])
+    expect(plan.creates).toEqual([])
   })
 })
