@@ -3,7 +3,7 @@
  * happened, see the delta, adjust — the plan is a hypothesis, not a contract.
  */
 import { addDays, format, parseISO } from 'date-fns'
-import { ChevronLeft, ChevronRight, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ListPlus, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react'
 import { useState } from 'react'
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
@@ -12,6 +12,7 @@ import { addDaysISO, todayISO } from '@/lib/date'
 import { useTimeStore } from '@/store/timeProjects'
 import { Button, ConfirmDialog, Segmented, Select } from '@/ui'
 import type { ViewMode } from './OptionsPopover'
+import { BulkCreate } from './BulkCreate'
 import { ProjectEditor } from './ProjectEditor'
 import { ProjectSidebar } from './ProjectSidebar'
 import { QualityEditor } from './QualityEditor'
@@ -40,6 +41,7 @@ export default function TimePage() {
   const [editing, setEditing] = useState<Project | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [qualitiesOpen, setQualitiesOpen] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
 
   const weekStart = weekStartFor(cursor, settings.weekStart)
@@ -61,6 +63,9 @@ export default function TimePage() {
             </Button>
             <Button variant="outline" onClick={() => setQualitiesOpen(true)}>
               <SlidersHorizontal className="size-4" /> Qualities
+            </Button>
+            <Button variant="outline" onClick={() => setBulkOpen(true)}>
+              <ListPlus className="size-4" /> Bulk add
             </Button>
             <Button
               onClick={() => {
@@ -158,6 +163,7 @@ export default function TimePage() {
       </div>
 
       <ProjectEditor project={editing} open={editorOpen} onOpenChange={setEditorOpen} />
+      <BulkCreate open={bulkOpen} onOpenChange={setBulkOpen} />
       <QualityEditor open={qualitiesOpen} onOpenChange={setQualitiesOpen} />
       <ConfirmDialog
         open={confirmReset}

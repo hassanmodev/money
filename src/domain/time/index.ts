@@ -18,6 +18,7 @@ import type { Block, Fragment, ISODate, ProjectId, TimeState } from './types'
 
 export * from './types'
 export * from './codes'
+export * from './bulk'
 export * from './colors'
 export * from './qualities'
 export * from './simulation'
