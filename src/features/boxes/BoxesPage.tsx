@@ -27,6 +27,7 @@ import { Button, Tooltip } from '@/ui'
 import { useComposer } from '@/features/transactions/ComposerProvider'
 import { BoxCard } from './BoxCard'
 import { BoxEditor } from './BoxEditor'
+import { BoxCharts } from './BoxCharts'
 
 type MoneyMoveEdge = 'income' | 'expense'
 type MoneyMoveMode = 'drag' | 'choose'
@@ -686,6 +687,8 @@ export default function BoxesPage() {
           ))}
         </div>
       )}
+
+      <BoxCharts />
 
       {moneyMove && (
         <MoneyMoveOverlay
