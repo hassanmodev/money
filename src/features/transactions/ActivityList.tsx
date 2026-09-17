@@ -7,7 +7,7 @@ import { fmtDateShort, relativeDay } from '@/lib/date'
 import { usePlannedBuys } from '@/store/selectors'
 import { useStore } from '@/store/store'
 import { useViewDate } from '@/store/time'
-import { Button, Chip, Menu, MenuItem } from '@/ui'
+import { Button, Chip, Menu, MenuItem, Money, MoneyEquivalents } from '@/ui'
 import { categoryOf } from './categories'
 import { useComposer } from './ComposerProvider'
 
@@ -26,7 +26,6 @@ function TransactionRow({ tx }: { tx: Transaction }) {
   const fromBox = boxes.find((b) => b.id === tx.boxId)
   const toBox = boxes.find((b) => b.id === tx.toBoxId)
 
-  const sign = tx.kind === 'expense' ? '−' : tx.kind === 'income' ? '+' : '→'
   const subtitle =
     tx.kind === 'transfer'
       ? `${fromBox?.name ?? '—'} → ${toBox?.name ?? '—'}`
@@ -68,8 +67,8 @@ function TransactionRow({ tx }: { tx: Transaction }) {
 
       <div className="text-right">
         <div className={cn('text-sm font-medium tabular', KIND_COLOR[tx.kind])}>
-          {sign}
-          {formatMoney(tx.amount, tx.currency)}
+          {tx.kind === 'transfer' && '→'}
+          <Money report amount={tx.kind === 'expense' ? -tx.amount : tx.amount} currency={tx.currency} sign={tx.kind !== 'transfer'} />
         </div>
         <div className="text-[11px] text-faint">{fmtDateShort(tx.date)}</div>
       </div>
@@ -159,6 +158,7 @@ function AchievedRow({
 
       <div className="text-right">
         <div className="text-sm font-medium tabular text-rust">−{formatMoney(cost, baseCurrency)}</div>
+        <MoneyEquivalents amount={-cost} currency={baseCurrency} />
         <div className="text-[11px] text-faint">{fmtDateShort(date)}</div>
       </div>
     </div>
@@ -208,6 +208,7 @@ function PlannedRow({ buy, baseCurrency }: { buy: PlannedBuy; baseCurrency: stri
 
       <div className="text-right">
         <div className="text-sm font-medium tabular text-muted">−{formatMoney(buy.cost, baseCurrency)}</div>
+        <MoneyEquivalents amount={-buy.cost} currency={baseCurrency} />
         <div className="text-[11px] text-faint">{fmtDateShort(buy.date)}</div>
       </div>
     </div>

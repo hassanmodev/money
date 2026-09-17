@@ -167,13 +167,13 @@ export default function PlanningPage() {
       </Card>
 
       <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Stat label="Today" value={<Money amount={result.currentNominal} compact />} />
-        <Stat label={`In ${horizonLabel(months)}`} value={<Money amount={endVal} animate compact />} />
+        <Stat label="Today" value={<Money report amount={result.currentNominal} compact />} />
+        <Stat label={`In ${horizonLabel(months)}`} value={<Money report amount={endVal} animate compact />} />
         <Stat
           label="Growth"
           value={<span className={growth >= 0 ? 'text-sage' : 'text-rust'}>{fmtSignedPercent(growth)}</span>}
         />
-        <Stat label="Lost to inflation" value={<Money amount={drag} compact />} />
+        <Stat label="Lost to inflation" value={<Money report amount={drag} compact />} />
       </div>
 
       {scenarioEnd !== null && (
@@ -184,11 +184,11 @@ export default function PlanningPage() {
           </div>
           <div className="flex items-center gap-3">
             <div className="font-serif text-xl text-ink">
-              <Money amount={scenarioEnd} compact />
+              <Money report amount={scenarioEnd} compact />
             </div>
             <Chip dot={scenarioEnd - endVal >= 0 ? '#9eb87f' : '#db8a82'}>
               <span className={scenarioEnd - endVal >= 0 ? 'text-sage' : 'text-rust'}>
-                <Money amount={scenarioEnd - endVal} compact sign /> vs model
+                <Money report amount={scenarioEnd - endVal} compact sign /> vs model
               </span>
             </Chip>
           </div>

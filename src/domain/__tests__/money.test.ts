@@ -1,11 +1,44 @@
 import { describe, expect, it } from 'vitest'
-import { convert, formatMoney, fromBase, roundMoney, toBase } from '../money'
+import { convert, formatMoney, fromBase, reportingAmounts, roundMoney, toBase } from '../money'
 import type { Settings } from '../types'
 
 const settings: Settings = {
   baseCurrency: 'EUR',
   rates: { USD: 0.9, BTC: 50000 },
 }
+
+describe('reportingAmounts', () => {
+  it('supports existing saves and keeps the base equivalent for foreign amounts', () => {
+    expect(reportingAmounts(100, 'EUR', settings)).toEqual([])
+    expect(reportingAmounts(100, 'USD', settings)).toEqual([{ currency: 'EUR', amount: 90 }])
+  })
+
+  it('converts across currencies in order without repeating source or base', () => {
+    const reportSettings = { ...settings, reportingCurrencies: ['USD', 'EUR', 'BTC', 'USD'] }
+    expect(reportingAmounts(100, 'USD', reportSettings)).toEqual([
+      { currency: 'EUR', amount: 90 },
+      { currency: 'BTC', amount: 0.0018 },
+    ])
+    expect(reportingAmounts(-90, 'EUR', reportSettings)).toEqual([
+      { currency: 'USD', amount: -100 },
+      { currency: 'BTC', amount: -0.0018 },
+    ])
+  })
+
+  it.each([undefined, 0, -1, NaN, Infinity])('requires a valid rate on either side (%s)', (rate) => {
+    const s: Settings = { ...settings, reportingCurrencies: ['CUSTOM'], rates: rate === undefined ? {} : { CUSTOM: rate } }
+    expect(reportingAmounts(100, 'EUR', s)).toEqual([{ currency: 'CUSTOM', amount: null }])
+    expect(reportingAmounts(100, 'CUSTOM', s)).toEqual([{ currency: 'EUR', amount: null }])
+  })
+
+  it('uses changed rates and supports a new base without duplicate amounts', () => {
+    const s: Settings = { baseCurrency: 'USD', rates: { EUR: 2, TOKEN: 4 }, reportingCurrencies: ['USD', 'TOKEN'] }
+    expect(reportingAmounts(10, 'EUR', s)).toEqual([
+      { currency: 'USD', amount: 20 }, { currency: 'TOKEN', amount: 5 },
+    ])
+    expect(reportingAmounts(0, 'USD', s)).toEqual([{ currency: 'TOKEN', amount: 0 }])
+  })
+})
 
 describe('conversion', () => {
   it('converts to and from the base currency', () => {

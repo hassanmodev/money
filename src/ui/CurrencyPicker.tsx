@@ -16,12 +16,14 @@ export function CurrencyPicker({
   className,
   'aria-label': ariaLabel,
   footer,
+  placeholder = 'Select currency',
 }: {
   value: string
   onChange: (code: string) => void
   className?: string
   'aria-label'?: string
   footer?: (query: string, close: () => void) => React.ReactNode
+  placeholder?: string
 }) {
   const currencies = useCurrencies()
   const [open, setOpen] = useState(false)
@@ -59,9 +61,11 @@ export function CurrencyPicker({
         )}
       >
         <span className="flex min-w-0 items-center gap-2">
-          <span className="w-5 shrink-0 text-center text-faint">{meta.symbol}</span>
-          <span className="font-medium">{meta.code}</span>
-          <span className="truncate text-muted">· {meta.name}</span>
+          {value ? <>
+            <span className="w-5 shrink-0 text-center text-faint">{meta.symbol}</span>
+            <span className="font-medium">{meta.code}</span>
+            <span className="truncate text-muted">· {meta.name}</span>
+          </> : <span className="text-muted">{placeholder}</span>}
         </span>
         <ChevronDown className="size-4 shrink-0 text-faint" />
       </PopoverTrigger>

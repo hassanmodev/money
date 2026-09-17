@@ -9,7 +9,7 @@ import { fmtDate } from '@/lib/date'
 import { fmtCompact } from '@/lib/format'
 import { useElementWidth, useIsMobile } from '@/lib/hooks'
 import { hexToRgba } from '@/lib/palette'
-import { useBaseCurrency } from '@/ui'
+import { Money, useBaseCurrency } from '@/ui'
 
 const morph = { type: 'spring' as const, stiffness: 130, damping: 26, mass: 0.9 }
 
@@ -244,7 +244,7 @@ export function ProjectionChart({
         >
           <div className="text-[11px] text-faint">{fmtDate(P[hi].date)}</div>
           <div className="font-serif text-xl text-ink">
-            {formatMoney(mode === 'real' ? P[hi].real : P[hi].nominal, base, { compact: false, decimals: 0 })}
+            <Money report amount={mode === 'real' ? P[hi].real : P[hi].nominal} decimals={0} />
           </div>
           <div className="mt-2 flex flex-col gap-1">
             {bands

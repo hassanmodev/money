@@ -145,12 +145,12 @@ function FlowRow({
       <div className="ml-auto flex w-28 items-center justify-end gap-1.5 text-right">
         <div>
           <div className="text-sm tabular text-ink">
-            <Money amount={annual} compact />
+            <Money report amount={annual} compact />
             <span className="text-faint">/yr</span>
           </div>
           {changed && (
             <div className={cn('text-[11px] tabular', delta >= 0 ? 'text-sage' : 'text-rust')}>
-              <Money amount={delta} compact sign />
+              <Money report amount={delta} compact sign />
             </div>
           )}
         </div>
@@ -205,13 +205,13 @@ function BulkRow({
         </div>
         <div className="flex items-center gap-2 text-right">
           <div className="text-sm tabular text-ink">
-            <Money amount={now} compact />
+            <Money report amount={now} compact />
             <span className="text-faint">/yr</span>
           </div>
           {Math.abs(now - base) > 0.005 && (
             <Chip dot={income ? '#9eb87f' : '#db8a82'}>
               <span className={now - base >= 0 ? 'text-sage' : 'text-rust'}>
-                <Money amount={now - base} compact sign />
+                <Money report amount={now - base} compact sign />
               </span>
             </Chip>
           )}
@@ -415,14 +415,14 @@ export function ScenarioPanel({
         <div>
           <div className="text-[11px] uppercase tracking-[0.1em] text-faint">Net flow / month</div>
           <div className="font-serif text-xl text-ink">
-            <Money amount={scNet / 12} compact sign />
+            <Money report amount={scNet / 12} compact sign />
           </div>
         </div>
         {Math.abs(netDelta) > 0.005 && (
           <div className="text-right">
             <div className="text-[11px] uppercase tracking-[0.1em] text-faint">vs. model</div>
             <div className={cn('font-serif text-xl', netDelta >= 0 ? 'text-sage' : 'text-rust')}>
-              <Money amount={netDelta / 12} compact sign />
+              <Money report amount={netDelta / 12} compact sign />
             </div>
           </div>
         )}

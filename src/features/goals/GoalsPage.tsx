@@ -229,7 +229,7 @@ export default function GoalsPage() {
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium uppercase tracking-[0.08em] text-faint">Spendable budget</span>
             <div className="font-serif text-2xl text-ink">
-              <Money amount={budget} />
+              <Money report amount={budget} />
             </div>
             {funding.length > 0 ? (
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -315,7 +315,7 @@ export default function GoalsPage() {
       <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label="Banked" value={<span className="tabular">{banked.toFixed(0)}</span>} accent />
         <Stat label="Plan unlocks" value={<span className="tabular">+{plan.happiness.toFixed(0)}</span>} accent />
-        <Stat label="Plan spend" value={<Money amount={plan.spend} compact />} />
+        <Stat label="Plan spend" value={<Money report amount={plan.spend} compact />} />
         <Stat label="Open goals" value={<span className="tabular">{openCount}</span>} />
       </div>
 
@@ -546,7 +546,7 @@ function PlanRow({
             {note && <span className="shrink-0 text-[10px] uppercase tracking-[0.08em] text-faint">{note}</span>}
           </div>
           <span className="shrink-0 text-xs tabular text-faint">
-            <Money amount={cost} compact />
+            <Money report amount={cost} compact />
           </span>
         </div>
         <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-line">

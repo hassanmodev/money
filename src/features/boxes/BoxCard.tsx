@@ -1,6 +1,6 @@
 import { ArrowDownRight, ArrowRight, ArrowUpRight, MoreHorizontal, Pencil, Scale, Target, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { toBase, type Box, type Effect } from '@/domain'
+import { type Box, type Effect } from '@/domain'
 import { cn } from '@/lib/cn'
 import { hexToRgba } from '@/lib/palette'
 import { useBoxValue } from '@/store/selectors'
@@ -34,7 +34,6 @@ function EffectChip({ effect }: { effect: Effect }) {
 }
 
 export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
-  const settings = useStore((s) => s.settings)
   const removeBox = useStore((s) => s.removeBox)
   const boxes = useStore((s) => s.boxes)
   const value = useBoxValue(box.id)
@@ -43,8 +42,6 @@ export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
   const [setBalance, setSetBalance] = useState(false)
 
   const Icon = boxIcon(box)
-  const baseValue = toBase(value, box.currency, settings)
-  const showBase = box.currency !== settings.baseCurrency
 
   const forwardTargets = (box.forwards ?? [])
     .map((f) => boxes.find((b) => b.id === f.toBoxId))
@@ -106,16 +103,12 @@ export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
 
         <div>
           <Money
+            report
             amount={value}
             currency={box.currency}
             animate
             className="font-serif text-[1.7rem] leading-none text-ink"
           />
-          {showBase && (
-            <div className="mt-1 text-xs text-faint">
-              ≈ <Money amount={baseValue} className="tabular" />
-            </div>
-          )}
         </div>
 
         <Sparkline data={series} color={box.color} width={320} height={40} className="w-full" />

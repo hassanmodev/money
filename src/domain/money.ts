@@ -80,3 +80,16 @@ export function convert(
   if (from === to) return amount
   return fromBase(toBase(amount, from, s), to, s)
 }
+
+/** Display equivalents, with no duplicate currencies or assumed 1:1 rates. */
+export function reportingAmounts(amount: number, source: CurrencyCode, s: Settings) {
+  const currencies = [...new Set([s.baseCurrency, ...(s.reportingCurrencies ?? [])])]
+  const validRate = (code: CurrencyCode) =>
+    code === s.baseCurrency || (Number.isFinite(s.rates[code]) && s.rates[code] > 0)
+  return currencies.filter((code) => code !== source).map((currency) => {
+    const value = validRate(source) && validRate(currency)
+      ? convert(amount, source, currency, s)
+      : NaN
+    return { currency, amount: Number.isFinite(value) ? value : null }
+  })
+}

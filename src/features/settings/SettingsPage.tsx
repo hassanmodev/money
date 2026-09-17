@@ -2,7 +2,7 @@ import { RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
-import { currencyMeta, marketRates } from '@/domain'
+import { currencyMeta, marketRateInBase } from '@/domain'
 import { fmtPercent } from '@/lib/format'
 import { useActiveBoxes } from '@/store/selectors'
 import { useStore } from '@/store/store'
@@ -21,12 +21,22 @@ export default function SettingsPage() {
 
   const base = settings.baseCurrency
   const inflation = settings.inflation ?? 0
+  const reportingCurrencies = [...new Set(settings.reportingCurrencies ?? [])].filter((c) => c !== base)
+
+  const addReportingCurrency = (code: string) => {
+    if (code === base || reportingCurrencies.includes(code)) return
+    const rate = settings.rates[code] ?? marketRateInBase(code, base)
+    updateSettings({
+      reportingCurrencies: [...reportingCurrencies, code],
+      ...(rate !== undefined ? { rates: { ...settings.rates, [code]: rate } } : {}),
+    })
+  }
 
   const otherCurrencies = useMemo(() => {
-    const set = new Set<string>([...Object.keys(settings.rates), ...boxes.map((b) => b.currency)])
+    const set = new Set<string>([...Object.keys(settings.rates), ...boxes.map((b) => b.currency), ...(settings.reportingCurrencies ?? [])])
     set.delete(base)
     return [...set]
-  }, [settings.rates, boxes, base])
+  }, [settings.rates, settings.reportingCurrencies, boxes, base])
 
   // Switching base re-pulls every rate from the bundled market data
   // (rates_usd.json) against the new base. Codes the table doesn't cover are
@@ -34,10 +44,15 @@ export default function SettingsPage() {
   const ratesFor = (nb: string): Record<string, number> => {
     const rateOf = (c: string) => (c === base ? 1 : (settings.rates[c] ?? 1))
     const denom = rateOf(nb) || 1
-    const codes = new Set<string>([...Object.keys(settings.rates), base, nb, ...boxes.map((b) => b.currency)])
-    const rebased: Record<string, number> = {}
-    for (const c of codes) rebased[c] = rateOf(c) / denom
-    return marketRates(nb, codes, rebased)
+    const codes = new Set<string>([...Object.keys(settings.rates), base, nb, ...boxes.map((b) => b.currency), ...(settings.reportingCurrencies ?? [])])
+    const rates: Record<string, number> = { [nb]: 1 }
+    for (const c of codes) {
+      if (c === nb) continue
+      const previous = c === base ? 1 : settings.rates[c]
+      const rate = marketRateInBase(c, nb) ?? (previous === undefined ? undefined : previous / denom)
+      if (rate !== undefined && Number.isFinite(rate) && rate > 0) rates[c] = rate
+    }
+    return rates
   }
 
   const changeBase = (nb: string) => {
@@ -51,7 +66,7 @@ export default function SettingsPage() {
 
   return (
     <Page>
-      <PageHeader title="Settings" subtitle="Base currency, exchange rates, and your data." />
+      <PageHeader title="Settings" subtitle="Reporting currencies, exchange rates, and your data." />
 
       <div className="flex flex-col gap-5">
         <Card className="flex flex-col gap-5 p-5 md:p-6">
@@ -68,6 +83,32 @@ export default function SettingsPage() {
               <span className="tabular text-sm text-muted">{fmtPercent(inflation)}</span>
             </div>
           </Field>
+        </Card>
+
+        <Card className="flex flex-col gap-4 p-5 md:p-6">
+          <div>
+            <h3 className="font-serif text-lg text-ink">Reporting currencies</h3>
+            <p className="text-sm text-muted">
+              Show extra currency equivalents for balances, net worth, planning, goals, and activity.
+              Add one for dual reporting, or choose several.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-lg border border-line px-3 py-2 text-sm text-muted">{base} · base</span>
+            {reportingCurrencies.map((code) => (
+              <Button key={code} variant="outline" aria-label={`Remove ${code} reporting currency`}
+                onClick={() => updateSettings({ reportingCurrencies: reportingCurrencies.filter((c) => c !== code) })}>
+                {code}<Trash2 className="size-3.5" />
+              </Button>
+            ))}
+          </div>
+          <CurrencyPicker value="" onChange={addReportingCurrency} placeholder="Add reporting currency"
+            aria-label="Add reporting currency" className="w-full max-w-xs" />
+          <p className="text-xs text-faint">
+            Reports lead with your base currency, with original amounts shown as smaller hints.
+            Equivalents use your saved exchange rates below, including for past and future dates.
+            New currencies use bundled reference rates when available; custom currencies need a rate.
+          </p>
         </Card>
 
         <Card className="p-5 md:p-6">
@@ -96,9 +137,11 @@ export default function SettingsPage() {
                     value={String(settings.rates[c] ?? '')}
                     onChange={(e) => {
                       const n = parseFloat(e.target.value)
-                      if (!Number.isNaN(n)) setRate(c, n)
+                      if (Number.isFinite(n) && n > 0) setRate(c, n)
                     }}
                     inputMode="decimal"
+                    aria-label={`Exchange rate for ${c}`}
+                    placeholder="Rate needed"
                     className="h-10 tabular"
                   />
                   <span className="shrink-0 text-sm text-faint">{currencyMeta(base).symbol}</span>

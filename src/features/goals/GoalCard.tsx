@@ -113,7 +113,7 @@ export function GoalCard({
         </header>
 
         <div className="flex items-end justify-between gap-2">
-          <Money amount={goal.cost} compact className="font-serif text-[1.55rem] leading-none text-ink" />
+          <Money report amount={goal.cost} compact className="font-serif text-[1.55rem] leading-none text-ink" />
           <div className="text-right">
             <div className="flex items-center justify-end gap-1 text-sm text-sage">
               <Sparkles className="size-3.5" />

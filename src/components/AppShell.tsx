@@ -16,6 +16,7 @@ function NetWorthSummary() {
     <div className="rounded-2xl border border-line bg-sunken/40 px-4 py-3.5">
       <div className="text-[11px] uppercase tracking-[0.1em] text-faint">Net worth</div>
       <Money
+        report
         amount={net}
         animate
         compact={false}
@@ -91,7 +92,7 @@ function MobileHeader() {
           <div className="text-[10px] uppercase leading-none tracking-[0.1em] text-faint">
             Net worth
           </div>
-          <Money amount={net} className="font-serif text-base text-ink" />
+          <Money report amount={net} className="font-serif text-base text-ink" />
         </div>
         <Link
           to="/settings"

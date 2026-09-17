@@ -44,11 +44,12 @@ function Hero() {
           <div className="min-w-0">
             <div className="text-sm text-muted">{greeting()}.</div>
             <div className="mt-5 text-[11px] uppercase tracking-[0.12em] text-faint">Full net worth</div>
-            <Money amount={fullNet} animate className="font-serif text-5xl text-ink md:text-6xl" />
+            <Money report amount={fullNet} animate className="font-serif text-5xl text-ink md:text-6xl" />
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
               <span>with planned goals</span>
-              <Money amount={goalNet} compact className="font-medium tabular text-ink" />
+              <Money report amount={goalNet} compact className="font-medium tabular text-ink" />
               <Money
+                report
                 amount={goalDelta}
                 compact
                 sign
@@ -102,7 +103,9 @@ function BoxTile({ box }: { box: Box }) {
         <div className="truncate text-sm text-ink">{box.name}</div>
         <div className="text-xs text-faint">{KIND_LABEL[box.kind]}</div>
       </div>
-      <Money amount={value} currency={box.currency} compact className="text-sm tabular text-ink" />
+      <span className="min-w-0 text-right">
+        <Money report amount={value} currency={box.currency} compact className="text-sm tabular text-ink" />
+      </span>
     </Link>
   )
 }

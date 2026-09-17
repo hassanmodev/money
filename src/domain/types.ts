@@ -228,6 +228,8 @@ export interface Goal {
 
 export interface Settings {
   baseCurrency: CurrencyCode
+  /** Extra display currencies alongside the original amount and base currency. */
+  reportingCurrencies?: CurrencyCode[]
   /** value of 1 unit of a currency expressed in the base currency (base = 1) */
   rates: Record<CurrencyCode, number>
   /** global annual inflation used to discount the whole net worth in the "real" view */
