@@ -6,7 +6,8 @@ import { useActiveBoxes } from '@/store/selectors'
 import { useStore } from '@/store/store'
 import { Button, Field, Input, Segmented, Sheet, Textarea } from '@/ui'
 import { boxIcon } from '@/ui/icons'
-import { CATEGORIES } from './categories'
+import { normalizeCategory, validCategory } from './categories'
+import { CategoryInput } from './CategoryInput'
 import { RhythmControl } from './RhythmControl'
 
 export interface ComposerPrefill {
@@ -124,7 +125,7 @@ export function AddTransaction({
   }
 
   const valid =
-    amount > 0 && boxId && (kind !== 'transfer' || (toBoxId && toBoxId !== boxId))
+    amount > 0 && boxId && (kind === 'transfer' || validCategory(category)) && (kind !== 'transfer' || (toBoxId && toBoxId !== boxId))
 
   const save = () => {
     if (!valid) return
@@ -134,7 +135,7 @@ export function AddTransaction({
       toBoxId: kind === 'transfer' ? toBoxId : undefined,
       amount,
       currency,
-      category: kind === 'transfer' ? category || 'savings' : category,
+      category: kind === 'transfer' ? category || 'savings' : normalizeCategory(category),
       note: note.trim() || undefined,
       date,
       recurrence: recurrence ? { ...recurrence, anchor: date } : undefined,
@@ -197,26 +198,7 @@ export function AddTransaction({
 
         {kind !== 'transfer' && (
           <Field label="Category">
-            <div className="flex flex-wrap gap-1.5">
-              {CATEGORIES.map((c) => {
-                const Icon = c.icon
-                const active = c.key === category
-                return (
-                  <button
-                    key={c.key}
-                    type="button"
-                    onClick={() => setCategory(c.key)}
-                    className={cn(
-                      'flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs transition-all duration-200',
-                      active ? 'border-clay/60 bg-clay/10 text-ink' : 'border-line text-muted hover:border-line-2',
-                    )}
-                  >
-                    <Icon className="size-3.5" style={{ color: active ? c.color : undefined }} />
-                    {c.label}
-                  </button>
-                )
-              })}
-            </div>
+            <CategoryInput value={category} onChange={setCategory} />
           </Field>
         )}
 

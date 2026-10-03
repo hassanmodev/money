@@ -6,9 +6,10 @@ import { useFinanceState, usePlannedBuys } from '@/store/selectors'
 import { useToday, useViewDate } from '@/store/time'
 import { Button, Card, Input, Money, Switch } from '@/ui'
 import { ActivityStatsModel } from './ActivityStatsModel'
+import { SpendingTree } from './SpendingTree'
 import { StatsEntriesTable } from './StatsEntriesTable'
 
-export function ActivityStats() {
+export function ActivityStats({ categoryQuery = '' }: { categoryQuery?: string }) {
   const state = useFinanceState()
   const planned = usePlannedBuys()
   const cursor = useViewDate()
@@ -108,7 +109,8 @@ export function ActivityStats() {
               : <>One-offs above <Money amount={stats.threshold} /> are set aside ({multiplier}× your median expense size over the past year). Recurring bills always count.</>}</p>
           </details>}
           {adjusted && <p className="text-xs text-honey"><Money amount={stats.excluded} /> set aside. Full money left: <Money amount={stats.income - stats.spending} />. Exclusions apply only to this view.</p>}
-          <StatsEntriesTable stats={stats} />
+          <SpendingTree stats={stats} query={categoryQuery} />
+          <StatsEntriesTable stats={stats} categoryQuery={categoryQuery} />
         </div>
       </>}
     </Card>

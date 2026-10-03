@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { Search } from 'lucide-react'
 import { fmtDateShort } from '@/lib/date'
 import { Button, Input, Money, Select } from '@/ui'
+import { matchesCategory } from './categories'
 import type { ActivityStatsModel } from './ActivityStatsModel'
 
-export function StatsEntriesTable({ stats }: { stats: ActivityStatsModel }) {
+export function StatsEntriesTable({ stats, categoryQuery = '' }: { stats: ActivityStatsModel; categoryQuery?: string }) {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('included')
   const [kind, setKind] = useState('all')
@@ -12,10 +13,11 @@ export function StatsEntriesTable({ stats }: { stats: ActivityStatsModel }) {
   const [visible, setVisible] = useState(10)
   const query = search.trim().toLowerCase()
   const entries = stats.entries.filter((entry) => {
+    if (!matchesCategory(entry.category, categoryQuery)) return false
     if (status === 'included' && entry.excluded) return false
     if (status === 'excluded' && !entry.excluded) return false
     if (kind !== 'all' && entry.kind !== kind) return false
-    return `${entry.label} ${entry.cadence}`.toLowerCase().includes(query)
+    return `${entry.label} ${entry.cadence} ${entry.category ?? 'other'}`.toLowerCase().includes(query)
   })
   entries.sort((a, b) => {
     if (sort === 'date') return b.lastDate.localeCompare(a.lastDate)
@@ -70,6 +72,7 @@ export function StatsEntriesTable({ stats }: { stats: ActivityStatsModel }) {
                 <tr key={entry.id} className="transition-colors hover:bg-raised/40">
                   <th scope="row" className="min-w-44 p-3 font-normal">
                     <span className="block text-ink">{entry.label}</span>
+                    <span className="block break-words text-xs text-muted">{entry.category || 'other'}</span>
                     <span className="text-xs text-faint">{entry.cadence}{entry.count > 1 ? ` · ${entry.count} ${entry.cadence === 'Daily accrual' ? 'days' : 'payments'}` : ''}</span>
                     {entry.excluded && <span className="ml-2 rounded-full bg-clay/10 px-2 py-0.5 text-[10px] text-clay">Set aside</span>}
                   </th>

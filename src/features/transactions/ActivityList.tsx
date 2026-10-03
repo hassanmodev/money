@@ -8,7 +8,7 @@ import { usePlannedBuys } from '@/store/selectors'
 import { useStore } from '@/store/store'
 import { useViewDate } from '@/store/time'
 import { Button, Chip, Menu, MenuItem, Money, MoneyEquivalents } from '@/ui'
-import { categoryOf } from './categories'
+import { categoryOf, matchesCategory } from './categories'
 import { useComposer } from './ComposerProvider'
 
 const KIND_COLOR: Record<Transaction['kind'], string> = {
@@ -224,7 +224,7 @@ type FeedItem =
   | { kind: 'goal'; date: string; goal: Goal }
   | { kind: 'buy'; date: string; buy: PlannedBuy }
 
-export function ActivityList({ limit, boxId }: { limit?: number; boxId?: string }) {
+export function ActivityList({ limit, boxId, categoryQuery = '' }: { limit?: number; boxId?: string; categoryQuery?: string }) {
   const transactions = useStore((s) => s.transactions)
   const goals = useStore((s) => s.goals)
   const baseCurrency = useStore((s) => s.settings.baseCurrency)
@@ -233,12 +233,12 @@ export function ActivityList({ limit, boxId }: { limit?: number; boxId?: string 
 
   const { upcoming, groups } = useMemo(() => {
     const items: FeedItem[] = transactions
-      .filter((t) => !boxId || t.boxId === boxId || t.toBoxId === boxId)
+      .filter((t) => (!boxId || t.boxId === boxId || t.toBoxId === boxId) && matchesCategory(t.category, categoryQuery))
       .map((tx) => ({ kind: 'tx', date: tx.date, tx }))
     // Goals draw from the shared funding pool, not a single box, so they only
     // make sense in the unfiltered feed — a per-box history shows the box's real
     // balance change, not a pool-wide goal line.
-    if (!boxId) {
+    if (!boxId && matchesCategory(undefined, categoryQuery)) {
       for (const g of goals) {
         if (g.status === 'done' && g.doneDate) items.push({ kind: 'goal', date: g.doneDate, goal: g })
       }
@@ -258,14 +258,14 @@ export function ActivityList({ limit, boxId }: { limit?: number; boxId?: string 
       else out.push({ day, items: [it] })
     }
     // Buys still ahead of the cursor sit in their own section, soonest first.
-    const up = boxId
+    const up = boxId || !matchesCategory(undefined, categoryQuery)
       ? []
       : plannedBuys
           .filter((p) => p.date > cursor)
           .sort((a, b) => (a.date < b.date ? -1 : 1))
           .slice(0, limit ?? plannedBuys.length)
     return { upcoming: up, groups: out }
-  }, [transactions, goals, plannedBuys, cursor, limit, boxId])
+  }, [transactions, goals, plannedBuys, cursor, limit, boxId, categoryQuery])
 
   if (groups.length === 0 && upcoming.length === 0) {
     return <p className="px-2.5 py-8 text-center text-sm text-faint">Nothing here yet.</p>

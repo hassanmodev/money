@@ -13,7 +13,7 @@ export class ActivityStatsModel {
   readonly days: number
   readonly entries: {
     id: string; label: string; date: string; lastDate: string; amount: number
-    kind: Transaction['kind']; cadence: string; count: number; excluded: boolean
+    category?: string; kind: Transaction['kind']; cadence: string; count: number; excluded: boolean
   }[] = []
 
   constructor(state: FinanceState, from: string, to: string, multiplier = Infinity, planned: PlannedBuy[] = []) {
@@ -40,7 +40,7 @@ export class ActivityStatsModel {
       if (!amounts.length) continue
       const amount = amounts.reduce((sum, entry) => sum + toBase(entry.amount, tx.currency, state.settings), 0)
       this.entries.push({
-        id: `tx:${tx.id}`, label: tx.note || tx.category || (tx.kind === 'income' ? 'Income' : 'Purchase'),
+        id: `tx:${tx.id}`, category: tx.category, label: tx.note || tx.category || (tx.kind === 'income' ? 'Income' : 'Purchase'),
         date: amounts[0].date, lastDate: amounts[amounts.length - 1].date, amount, kind: tx.kind,
         cadence: tx.recurrence?.dailyAccrual ? 'Daily accrual' : tx.recurrence ? 'Recurring' : 'One-off',
         count: amounts.length, excluded: !tx.recurrence && tx.kind === 'expense' && this.isUnusual(amount),
