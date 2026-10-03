@@ -19,11 +19,12 @@ export interface MoneyProps extends FormatOptions {
   animate?: boolean
   /** Lead with base currency, then the original and extra reporting currencies. */
   report?: boolean
+  reportInline?: boolean
   className?: string
 }
 
 /** Render an amount in a currency (base by default), optionally spring-animated. */
-export function Money({ amount, currency, animate, report, className, ...opts }: MoneyProps) {
+export function Money({ amount, currency, animate, report, reportInline, className, ...opts }: MoneyProps) {
   const settings = useStore((s) => s.settings)
   const base = settings.baseCurrency
   const code = currency ?? base
@@ -32,11 +33,11 @@ export function Money({ amount, currency, animate, report, className, ...opts }:
       ? amount
       : reportingAmounts(amount, code, settings).find((value) => value.currency === base)?.amount
     return (
-      <span className="inline-block min-w-0 max-w-full align-baseline">
+      <span className={cn('min-w-0 max-w-full align-baseline', reportInline ? 'inline-flex flex-wrap items-baseline gap-x-2 gap-y-1' : 'inline-block')}>
         {baseAmount == null
           ? <span className="text-sm text-muted">{base} · rate needed</span>
           : <Money amount={baseAmount} currency={base} animate={animate} className={className} {...opts} />}
-        <MoneyEquivalents amount={amount} currency={code} baseFirst {...opts} />
+        <MoneyEquivalents amount={amount} currency={code} baseFirst reportInline={reportInline} {...opts} />
       </span>
     )
   }
@@ -53,7 +54,7 @@ export function Money({ amount, currency, animate, report, className, ...opts }:
 }
 
 /** Secondary figures always name their currency, even when symbols overlap. */
-export function MoneyEquivalents({ amount, currency, className, baseFirst = false, ...opts }: Omit<MoneyProps, 'animate' | 'report'> & { baseFirst?: boolean }) {
+export function MoneyEquivalents({ amount, currency, className, reportInline, baseFirst = false, ...opts }: Omit<MoneyProps, 'animate' | 'report'> & { baseFirst?: boolean }) {
   const settings = useStore((s) => s.settings)
   const source = currency ?? settings.baseCurrency
   const original = baseFirst && source !== settings.baseCurrency
@@ -61,14 +62,14 @@ export function MoneyEquivalents({ amount, currency, className, baseFirst = fals
     .filter((value) => !baseFirst || value.currency !== settings.baseCurrency)
   if (!original && !values.length) return null
   return (
-    <span className={cn('mt-1 block font-sans text-xs font-normal leading-relaxed text-muted tabular', className)}>
+    <span className={cn('font-sans text-xs font-normal leading-relaxed text-muted tabular', reportInline ? 'inline-flex flex-wrap items-baseline gap-x-2 gap-y-1' : 'mt-1 block', className)}>
       {original && (
-        <span className="block" title="Original amount in its native currency">
+        <span className={reportInline ? 'whitespace-nowrap' : 'block'} title="Original amount in its native currency">
           {formatMoney(amount, source, { compact: opts.compact, sign: opts.sign })} · {source}
         </span>
       )}
       {values.map((value) => (
-        <span key={value.currency} className="block" title="Equivalent at your saved exchange rates">
+        <span key={value.currency} className={reportInline ? 'whitespace-nowrap' : 'block'} title="Equivalent at your saved exchange rates">
           {value.amount === null
             ? `${value.currency} · rate needed`
             : `≈ ${formatMoney(value.amount, value.currency, { compact: opts.compact, sign: opts.sign })} · ${value.currency}`}

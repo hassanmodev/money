@@ -83,6 +83,23 @@ export default function SettingsPage() {
               <span className="tabular text-sm text-muted">{fmtPercent(inflation)}</span>
             </div>
           </Field>
+          <Field label="Annual asset depreciation" hint="Default yearly loss in value. Assets can set their own depreciation effect.">
+            <div className="flex max-w-xs items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step="any"
+                aria-label="Annual asset depreciation"
+                value={Number(((settings.assetDepreciation ?? 0.1) * 100).toFixed(6))}
+                onChange={(e) => {
+                  const value = e.target.valueAsNumber
+                  if (Number.isFinite(value) && value >= 0 && value <= 100) updateSettings({ assetDepreciation: value / 100 })
+                }}
+              />
+              <span className="text-sm text-muted">%</span>
+            </div>
+          </Field>
         </Card>
 
         <Card className="flex flex-col gap-4 p-5 md:p-6">

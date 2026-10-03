@@ -11,17 +11,22 @@ import { NAV, type NavItemDef } from './nav'
 import { TimeScrubber } from './TimeScrubber'
 
 function NetWorthSummary() {
-  const net = useNetWorth()
+  const net = useNetWorth(undefined, false)
+  const includingAssets = useNetWorth()
   return (
-    <div className="rounded-2xl border border-line bg-sunken/40 px-4 py-3.5">
-      <div className="text-[11px] uppercase tracking-[0.1em] text-faint">Net worth</div>
+    <div className="rounded-2xl border border-line bg-sunken/40 px-5 py-5">
+      <div className="text-[11px] uppercase tracking-[0.1em] text-faint">Net worth · regular boxes</div>
       <Money
         report
         amount={net}
         animate
         compact={false}
-        className="mt-1 block font-serif text-[1.6rem] leading-tight text-ink"
+        className="mt-2 block font-serif text-[1.6rem] leading-tight text-ink"
       />
+      <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 border-t border-line pt-3 text-xs text-muted">
+        <span>Including assets</span>
+        <Money amount={includingAssets} compact className="text-ink" />
+      </div>
     </div>
   )
 }
@@ -32,7 +37,7 @@ function SidebarNavItem({ item }: { item: NavItemDef }) {
       {({ isActive }) => (
         <span
           className={cn(
-            'relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200',
+            'relative flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors duration-200',
             isActive ? 'text-ink' : 'text-faint hover:text-muted',
           )}
         >
@@ -54,7 +59,7 @@ function SidebarNavItem({ item }: { item: NavItemDef }) {
 function DesktopSidebar() {
   const composer = useComposer()
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface/40 px-4 py-6 md:flex">
+    <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col border-r border-line bg-surface/40 px-4 py-6 md:flex xl:w-80">
       <Link to="/" className="mb-7 flex items-center gap-2.5 px-2">
         <BrandMark />
         <div className="leading-none">
@@ -65,7 +70,7 @@ function DesktopSidebar() {
 
       <NetWorthSummary />
 
-      <nav className="mt-6 flex flex-1 flex-col gap-1">
+      <nav className="mt-7 flex flex-1 flex-col gap-1.5">
         {NAV.map((item) => (
           <SidebarNavItem key={item.to} item={item} />
         ))}
@@ -80,7 +85,8 @@ function DesktopSidebar() {
 }
 
 function MobileHeader() {
-  const net = useNetWorth()
+  const net = useNetWorth(undefined, false)
+  const includingAssets = useNetWorth()
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-canvas/80 px-5 py-3 backdrop-blur-md md:hidden">
       <Link to="/" className="flex items-center gap-2">
@@ -90,9 +96,12 @@ function MobileHeader() {
       <div className="flex items-center gap-3">
         <div className="text-right">
           <div className="text-[10px] uppercase leading-none tracking-[0.1em] text-faint">
-            Net worth
+            Net worth · regular boxes
           </div>
           <Money report amount={net} className="font-serif text-base text-ink" />
+          <div className="text-[10px] text-muted">
+            Including assets <Money amount={includingAssets} compact />
+          </div>
         </div>
         <Link
           to="/settings"

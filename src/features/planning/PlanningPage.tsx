@@ -38,7 +38,7 @@ const topLine = (
 
 export default function PlanningPage() {
   const state = useFinanceState()
-  const boxes = useActiveBoxes()
+  const boxes = useActiveBoxes().filter((box) => box.kind !== 'asset')
   const updateTransaction = useStore((s) => s.updateTransaction)
 
   const [months, setMonths] = useState(12)
@@ -46,8 +46,9 @@ export default function PlanningPage() {
 
   const from = useViewDate()
   const to = addMonthsISO(from, months)
-  const opts = useMemo(() => ({ from, to, steps: 120 }), [from, to])
+  const opts = useMemo(() => ({ from, to, steps: 120, includeAssets: false }), [from, to])
   const result = useProjection(opts)
+  const includingAssets = useProjection({ ...opts, includeAssets: true })
   // Scenario overlays ride the same planned buys as the baseline, so every line
   // dips on the same goal dates as the model line.
   const plannedBuys = usePlannedBuys()
@@ -128,7 +129,7 @@ export default function PlanningPage() {
 
       <Card className="mt-4 p-4 md:p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-sm font-medium text-muted">Net worth over time</h2>
+          <h2 className="text-sm font-medium text-muted">Net worth over time · regular boxes</h2>
           <Segmented
             value={mode}
             onChange={setMode}
@@ -174,6 +175,17 @@ export default function PlanningPage() {
           value={<span className={growth >= 0 ? 'text-sage' : 'text-rust'}>{fmtSignedPercent(growth)}</span>}
         />
         <Stat label="Lost to inflation" value={<Money report amount={drag} compact />} />
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+        <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span>Including assets today</span>
+          <Money report reportInline amount={includingAssets.currentNominal} compact className="tabular text-ink" />
+        </span>
+        <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span>in {horizonLabel(months)}</span>
+          <Money report reportInline amount={mode === 'real' ? includingAssets.endReal : includingAssets.endNominal} compact className="tabular text-ink" />
+        </span>
       </div>
 
       {scenarioEnd !== null && (

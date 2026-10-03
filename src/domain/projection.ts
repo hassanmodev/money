@@ -82,6 +82,7 @@ export interface ProjectionOptions {
   from: ISODate
   to: ISODate
   steps?: number // number of sample points (default 96)
+  includeAssets?: boolean
 }
 
 interface Occurrence {
@@ -274,6 +275,7 @@ export function project(
     let nominal = 0
     let real = 0
     for (const box of active) {
+      if (opts.includeAssets === false && box.kind === 'asset') continue
       const v = perBoxBase[box.id][i]
       perBox[box.id] = v
       nominal += v
@@ -328,12 +330,12 @@ export function boxValueAt(
 }
 
 /** Total net worth on a date, in the base currency. */
-export function netWorthAt(state: FinanceState, dateISO: ISODate, plannedBuys: PlannedBuy[] = []): number {
+export function netWorthAt(state: FinanceState, dateISO: ISODate, plannedBuys: PlannedBuy[] = [], includeAssets = true): number {
   const active = state.boxes.filter((b) => !b.archived)
   const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], active, state.settings.baseCurrency, plannedBuys)]
   const series = simulate(active, txns, state.settings, [parseISO(dateISO).getTime()])
   return active.reduce(
-    (sum, b) => sum + toBase(series[b.id][0], b.currency, state.settings),
+    (sum, b) => sum + (!includeAssets && b.kind === 'asset' ? 0 : toBase(series[b.id][0], b.currency, state.settings)),
     0,
   )
 }

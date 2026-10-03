@@ -44,6 +44,53 @@ const state = (boxes: Box[], transactions: Transaction[] = [], goals: FinanceSta
 // 2026-01-01 → 2030-01-01 spans exactly 1461 days = 4.000 years (2028 is a leap year).
 const FOUR_YEARS = { from: '2026-01-01', to: '2030-01-01' }
 
+describe('asset boxes', () => {
+  it('keeps the price paid and compounds the default depreciation', () => {
+    const asset = box({ kind: 'asset', openingBalance: 1000 })
+    const world = state([asset])
+    expect(boxValueAt(world, asset.id, '2025-12-31')).toBe(0)
+    expect(boxValueAt(world, asset.id, FOUR_YEARS.from)).toBe(1000)
+    expect(boxValueAt(world, asset.id, FOUR_YEARS.to)).toBeCloseTo(1000 * 0.9 ** 4, 6)
+    expect(project(world, { ...FOUR_YEARS, steps: 120 }).endNominal).toBeCloseTo(1000 * 0.9 ** 4, 6)
+    expect(asset.openingBalance).toBe(1000)
+  })
+
+  it('uses settings unless the asset has its own depreciation effect', () => {
+    const inherited = box({ kind: 'asset', openingBalance: 1000 })
+    const custom = box({ kind: 'asset', openingBalance: 1000, effects: [{
+      id: 'depreciation', kind: 'depreciation', annualRate: 0.05, compounding: 'annually',
+    }] })
+    const world = state([inherited, custom])
+    world.settings = { ...settings, assetDepreciation: 0.2 }
+    expect(boxValueAt(world, inherited.id, FOUR_YEARS.to)).toBeCloseTo(1000 * 0.8 ** 4, 6)
+    expect(boxValueAt(world, custom.id, FOUR_YEARS.to)).toBeCloseTo(1000 * 0.95 ** 4, 6)
+    world.settings = { ...settings, assetDepreciation: 0 }
+    expect(boxValueAt(world, inherited.id, FOUR_YEARS.to)).toBe(1000)
+    custom.effects[0].annualRate = 0
+    expect(boxValueAt(world, custom.id, FOUR_YEARS.to)).toBe(1000)
+    custom.effects = []
+    world.settings = { ...settings, assetDepreciation: 0.2 }
+    expect(boxValueAt(world, custom.id, FOUR_YEARS.to)).toBeCloseTo(1000 * 0.8 ** 4, 6)
+  })
+
+  it('reports regular boxes separately while preserving flows through assets', () => {
+    const cash = box({ openingBalance: 500 })
+    const asset = box({ kind: 'asset', currency: 'USD', openingBalance: 1000 })
+    const archived = box({ kind: 'asset', openingBalance: 2000, archived: true })
+    const world = state([cash, asset, archived], [{
+      id: 'transfer', kind: 'transfer', boxId: asset.id, toBoxId: cash.id,
+      amount: 100, currency: 'EUR', date: FOUR_YEARS.from, createdAt: cash.createdAt,
+    }])
+    const assetValue = (900 - 100) * 0.9 ** 4
+    expect(netWorthAt(world, FOUR_YEARS.to, [], false)).toBeCloseTo(600, 6)
+    expect(netWorthAt(world, FOUR_YEARS.to)).toBeCloseTo(600 + assetValue, 6)
+    const regular = project(world, { ...FOUR_YEARS, includeAssets: false })
+    expect(regular.endNominal).toBeCloseTo(600, 6)
+    expect(regular.points.at(-1)?.perBox).toEqual({ [cash.id]: 600 })
+    expect(project(world, FOUR_YEARS).endNominal).toBeCloseTo(600 + assetValue, 6)
+  })
+})
+
 describe('compound growth', () => {
   it('grows a box by (1+r)^t over the horizon', () => {
     const r = project(

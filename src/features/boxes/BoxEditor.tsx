@@ -11,6 +11,7 @@ import {
 import { cn } from '@/lib/cn'
 import { SWATCHES } from '@/lib/palette'
 import { todayISO } from '@/lib/date'
+import { newId } from '@/lib/id'
 import { useStore } from '@/store/store'
 import { Button, ConfirmDialog, CurrencyPicker, Field, Input, Sheet, Textarea } from '@/ui'
 import { KIND_ICON, KIND_LABEL } from '@/ui/icons'
@@ -71,19 +72,22 @@ export function BoxEditor({
   open,
   onOpenChange,
   box,
+  initialKind = 'checking',
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   box?: Box
+  initialKind?: BoxKind
 }) {
   const addBox = useStore((s) => s.addBox)
   const updateBox = useStore((s) => s.updateBox)
   const removeBox = useStore((s) => s.removeBox)
   const allBoxes = useStore((s) => s.boxes)
   const baseCurrency = useStore((s) => s.settings.baseCurrency)
+  const assetDepreciation = useStore((s) => s.settings.assetDepreciation ?? 0.1)
 
   const [name, setName] = useState(box?.name ?? '')
-  const [kind, setKind] = useState<BoxKind>(box?.kind ?? 'checking')
+  const [kind, setKind] = useState<BoxKind>(box?.kind ?? initialKind)
   const [currency, setCurrency] = useState(box?.currency ?? baseCurrency)
   const [balanceStr, setBalanceStr] = useState(String(box?.openingBalance ?? ''))
   const [openingDate, setOpeningDate] = useState(box?.openingDate ?? todayISO())
@@ -99,7 +103,7 @@ export function BoxEditor({
   useEffect(() => {
     if (!open) return
     setName(box?.name ?? '')
-    setKind(box?.kind ?? 'checking')
+    setKind(box?.kind ?? initialKind)
     setCurrency(box?.currency ?? baseCurrency)
     setBalanceStr(String(box?.openingBalance ?? ''))
     setOpeningDate(box?.openingDate ?? todayISO())
@@ -110,7 +114,7 @@ export function BoxEditor({
     setForwards(box?.forwards ?? [])
     setFundsGoals(box?.fundsGoals ?? false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, box])
+  }, [open, box, initialKind])
 
   const symbol = currencyMeta(currency).symbol
   // Boxes this one can spill into — everything live except itself.
@@ -144,8 +148,8 @@ export function BoxEditor({
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      title={box ? 'Edit box' : 'New box'}
-      description={box ? undefined : 'A separate place your money lives, with its own rules.'}
+      title={box ? 'Edit box' : kind === 'asset' ? 'New asset' : 'New box'}
+      description={box ? undefined : kind === 'asset' ? 'Track a purchase and its value over time.' : 'A separate place your money lives, with its own rules.'}
       footer={
         <>
           {box && (
@@ -161,7 +165,7 @@ export function BoxEditor({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={save}>{box ? 'Save changes' : 'Create box'}</Button>
+          <Button onClick={save}>{box ? 'Save changes' : kind === 'asset' ? 'Create asset' : 'Create box'}</Button>
         </>
       }
     >
@@ -171,7 +175,7 @@ export function BoxEditor({
             id="box-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Rainy day fund"
+            placeholder={kind === 'asset' ? 'e.g. Laptop' : 'e.g. Rainy day fund'}
             autoFocus={!box}
           />
         </Field>
@@ -184,7 +188,7 @@ export function BoxEditor({
           <Field label="Currency">
             <CurrencyPicker value={currency} onChange={setCurrency} aria-label="Currency" />
           </Field>
-          <Field label="Opening balance">
+          <Field label={kind === 'asset' ? 'Price paid' : 'Opening balance'}>
             <div className="relative">
               <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
                 {symbol}
@@ -200,7 +204,7 @@ export function BoxEditor({
           </Field>
         </div>
 
-        <Field label="Tracking since" hint="When this opening balance was true.">
+        <Field label={kind === 'asset' ? 'Purchase date' : 'Tracking since'} hint={kind === 'asset' ? 'Depreciation starts on this date.' : 'When this opening balance was true.'}>
           <Input
             type="date"
             value={openingDate}
@@ -253,6 +257,14 @@ export function BoxEditor({
           label="Effects"
           hint="Rules that bend this box's value over time — interest, inflation, and the like."
         >
+          {kind === 'asset' && !effects.some((e) => e.kind === 'depreciation') && (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
+              <span>{assetDepreciation * 100}% annual depreciation · from settings</span>
+              <Button variant="outline" onClick={() => setEffects([...effects, {
+                id: newId('fx'), kind: 'depreciation', annualRate: assetDepreciation, compounding: 'annually',
+              }])}>Set own depreciation</Button>
+            </div>
+          )}
           <EffectEditor value={effects} onChange={setEffects} />
         </Field>
 

@@ -36,6 +36,7 @@ function EffectChip({ effect }: { effect: Effect }) {
 export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
   const removeBox = useStore((s) => s.removeBox)
   const boxes = useStore((s) => s.boxes)
+  const assetDepreciation = useStore((s) => s.settings.assetDepreciation ?? 0.1)
   const value = useBoxValue(box.id)
   const series = useBoxSeries(box)
   const [confirm, setConfirm] = useState(false)
@@ -109,6 +110,11 @@ export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
             animate
             className="font-serif text-[1.7rem] leading-none text-ink"
           />
+          {box.kind === 'asset' && (
+            <div className="mt-2 text-xs text-muted">
+              Price paid <Money amount={box.openingBalance} currency={box.currency} /> · {box.openingDate}
+            </div>
+          )}
         </div>
 
         <Sparkline data={series} color={box.color} width={320} height={40} className="w-full" />
@@ -125,6 +131,12 @@ export function BoxCard({ box, onEdit }: { box: Box; onEdit: () => void }) {
           {box.effects.map((e) => (
             <EffectChip key={e.id} effect={e} />
           ))}
+          {box.kind === 'asset' && !box.effects.some((e) => e.kind === 'depreciation') && (
+            <Chip className="gap-1 text-rust">
+              <ArrowDownRight className="size-3" />
+              {pct(assetDepreciation)} depreciation
+            </Chip>
+          )}
           {forwardTargets.map((t) => (
             <Chip key={t.id} className="gap-1" style={{ color: t.color }}>
               <ArrowRight className="size-3" />

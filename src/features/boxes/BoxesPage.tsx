@@ -17,7 +17,7 @@ import type {
 import { useEffect, useRef, useState } from 'react'
 import { Page } from '@/components/Page'
 import { PageHeader } from '@/components/PageHeader'
-import { boxValueAt, toBase, type Box } from '@/domain'
+import { boxValueAt, toBase, type Box, type BoxKind } from '@/domain'
 import { cn } from '@/lib/cn'
 import { useMediaQuery } from '@/lib/hooks'
 import { useActiveBoxes, useFinanceState, usePlannedBuys } from '@/store/selectors'
@@ -281,6 +281,8 @@ function moveId(ids: string[], fromId: string, toId: string) {
 
 export default function BoxesPage() {
   const boxes = useActiveBoxes()
+  const regularBoxes = boxes.filter((box) => box.kind !== 'asset')
+  const assets = boxes.filter((box) => box.kind === 'asset')
   const state = useFinanceState()
   const planned = usePlannedBuys()
   const viewDate = useViewDate()
@@ -288,6 +290,7 @@ export default function BoxesPage() {
   const composer = useComposer()
   const reorderBoxes = useStore((s) => s.reorderBoxes)
   const [editorOpen, setEditorOpen] = useState(false)
+  const [initialKind, setInitialKind] = useState<BoxKind>('checking')
   const [editing, setEditing] = useState<Box | undefined>(undefined)
   const [draggingId, setDraggingId] = useState<string | undefined>(undefined)
   const [overId, setOverId] = useState<string | undefined>(undefined)
@@ -314,7 +317,8 @@ export default function BoxesPage() {
     ? boxes.find((b) => b.id === moneyMove.hoverBoxId)
     : undefined
 
-  const openNew = () => {
+  const openNew = (kind: BoxKind = 'checking') => {
+    setInitialKind(kind)
     setEditing(undefined)
     setEditorOpen(true)
   }
@@ -600,32 +604,9 @@ export default function BoxesPage() {
     }
   }
 
-  return (
-    <Page>
-      <PageHeader
-        title="Boxes"
-        subtitle="The separate places your money lives — each with its own rules."
-        actions={
-          boxes.length > 0 && (
-            <>
-              <Button variant="outline" onClick={sortByMoney}>
-                <ArrowDownWideNarrow className="size-4" />
-                Sort by money
-              </Button>
-              <Button onClick={openNew}>
-                <Plus className="size-4" />
-                New box
-              </Button>
-            </>
-          )
-        }
-      />
-
-      {boxes.length === 0 ? (
-        <EmptyState onNew={openNew} />
-      ) : (
+  const renderBoxes = (items: Box[]) => (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {boxes.map((b, i) => (
+          {items.map((b, i) => (
             <div
               key={b.id}
               data-box-id={b.id}
@@ -686,7 +667,52 @@ export default function BoxesPage() {
             </div>
           ))}
         </div>
+  )
+
+  return (
+    <Page>
+      <PageHeader
+        title="Boxes"
+        subtitle="The separate places your money lives — each with its own rules."
+        actions={
+          boxes.length > 0 && (
+            <>
+              <Button variant="outline" onClick={sortByMoney}>
+                <ArrowDownWideNarrow className="size-4" />
+                Sort by money
+              </Button>
+              <Button onClick={() => openNew()}>
+                <Plus className="size-4" />
+                New box
+              </Button>
+            </>
+          )
+        }
+      />
+
+      {boxes.length === 0 ? (
+        <EmptyState onNew={openNew} />
+      ) : (
+        renderBoxes(regularBoxes)
       )}
+
+      <section aria-labelledby="assets-heading" className="mt-8 border-t border-line pt-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 id="assets-heading" className="font-serif text-2xl text-ink">Assets</h2>
+            <p className="mt-1 text-sm text-muted">Things you own, valued from their purchase price.</p>
+          </div>
+          <Button variant="outline" onClick={() => openNew('asset')}>
+            <Plus className="size-4" />
+            New asset
+          </Button>
+        </div>
+        {assets.length > 0 ? renderBoxes(assets) : (
+          <p className="rounded-xl border border-dashed border-line p-5 text-sm text-faint">
+            Add an asset to track its value over time.
+          </p>
+        )}
+      </section>
 
       <BoxCharts />
 
@@ -706,6 +732,7 @@ export default function BoxesPage() {
         open={editorOpen}
         onOpenChange={setEditorOpen}
         box={editing}
+        initialKind={initialKind}
       />
     </Page>
   )

@@ -166,29 +166,29 @@ export function useBox(id: string | undefined) {
  * buys deduct once their date is reached: today this is your actual money, and
  * as you time-travel forward each buy the plan has passed has left.
  */
-export function useNetWorth(dateISO?: string): number {
+export function useNetWorth(dateISO?: string, includeAssets = true): number {
   const state = useFinanceState()
   const view = useNow()
   const date = dateISO ?? view
   const planned = usePlannedBuys()
-  return useMemo(() => netWorthAt(state, date, planned), [state, date, planned])
+  return useMemo(() => netWorthAt(state, date, planned, includeAssets), [state, date, planned, includeAssets])
 }
 
 /** Net worth without scheduled goal auto-buys, while still counting manual achieved goals. */
-export function useNetWorthWithoutPlannedGoals(dateISO?: string): number {
+export function useNetWorthWithoutPlannedGoals(dateISO?: string, includeAssets = true): number {
   const state = useFinanceState()
   const view = useNow()
   const date = dateISO ?? view
-  return useMemo(() => netWorthAt(state, date), [state, date])
+  return useMemo(() => netWorthAt(state, date, [], includeAssets), [state, date, includeAssets])
 }
 
 /** Net worth with the committed scheduled goal buys, regardless of the auto-apply toggle. */
-export function useNetWorthWithPlannedGoals(dateISO?: string): number {
+export function useNetWorthWithPlannedGoals(dateISO?: string, includeAssets = true): number {
   const state = useFinanceState()
   const view = useNow()
   const date = dateISO ?? view
   const planned = useCommittedPlannedBuys()
-  return useMemo(() => netWorthAt(state, date, planned), [state, date, planned])
+  return useMemo(() => netWorthAt(state, date, planned, includeAssets), [state, date, planned, includeAssets])
 }
 
 /** A single box's value in its own currency on a date (default today). */
@@ -210,6 +210,6 @@ export function useProjection(opts: ProjectionOptions): ProjectionResult {
   const planned = usePlannedBuys()
   return useMemo(
     () => project(state, opts, planned),
-    [state, planned, opts.from, opts.to, opts.steps],
+    [state, planned, opts.from, opts.to, opts.steps, opts.includeAssets],
   )
 }

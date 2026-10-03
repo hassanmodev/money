@@ -93,8 +93,8 @@ export interface Box {
   name: string
   kind: BoxKind
   currency: CurrencyCode
-  openingBalance: number
-  openingDate: ISODate
+  openingBalance: number // price paid for assets
+  openingDate: ISODate // purchase date for assets
   color: string // hex from the curated swatch palette
   icon?: string // optional lucide icon name override
   effects: Effect[]
@@ -234,6 +234,8 @@ export interface Settings {
   rates: Record<CurrencyCode, number>
   /** global annual inflation used to discount the whole net worth in the "real" view */
   inflation?: number
+  /** Default annual loss in asset value; unset means 10%. */
+  assetDepreciation?: number
   /** sooner counts more: a goal's worth halves every this-many months further out */
   happinessHalfLifeMonths?: number
   /** whether scheduled goal buys automatically deduct from balances once reached */

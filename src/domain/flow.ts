@@ -23,7 +23,7 @@
  * the rest of `src/domain`.
  */
 import { parseISO } from 'date-fns'
-import { nominalFactor } from './effects'
+import { growthFactor, nominalFactor } from './effects'
 import { convert } from './money'
 import type { AcceptancePoint, Box, Forward, Settings } from './types'
 
@@ -203,6 +203,12 @@ export class FlowNode {
     return this.curve.keepsEverything && this.routing.isEmpty
   }
 
+  valueFactor(years: number, settings: Settings): number {
+    const factor = nominalFactor(this.box.effects, years)
+    if (this.box.kind !== 'asset' || this.box.effects.some((e) => e.kind === 'depreciation')) return factor
+    return factor * growthFactor(-(settings.assetDepreciation ?? 0.1), 'annually', years)
+  }
+
   /**
    * Receive `amount` (this box's currency) at a given starting `level`. Returns
    * the box's new level and the amounts to push onward (still this box's
@@ -255,7 +261,7 @@ export class FlowNetwork {
     const value = this.level.get(id)!
     if (value !== 0) {
       const node = this.nodes.get(id)!
-      this.level.set(id, value * nominalFactor(node.box.effects, (this.now - last) / MS_PER_YEAR))
+      this.level.set(id, value * node.valueFactor((this.now - last) / MS_PER_YEAR, this.settings))
     }
     this.lastT.set(id, this.now)
   }

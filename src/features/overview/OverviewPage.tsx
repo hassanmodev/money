@@ -28,12 +28,14 @@ function greeting() {
 }
 
 function Hero() {
-  const fullNet = useNetWorthWithoutPlannedGoals()
-  const goalNet = useNetWorthWithPlannedGoals()
+  const fullNet = useNetWorthWithoutPlannedGoals(undefined, false)
+  const goalNet = useNetWorthWithPlannedGoals(undefined, false)
+  const includingAssets = useNetWorthWithoutPlannedGoals()
+  const includingAssetsWithGoals = useNetWorthWithPlannedGoals()
   const autoApply = useGoalAutoApply()
   const updateSettings = useStore((s) => s.updateSettings)
   const from = useViewDate()
-  const proj = useProjection({ from, to: addYearsISO(from, 5), steps: 60 })
+  const proj = useProjection({ from, to: addYearsISO(from, 5), steps: 60, includeAssets: false })
   const series = proj.points.map((p) => p.nominal)
   const growth = fullNet > 0 ? proj.endNominal / fullNet - 1 : 0
   const goalDelta = goalNet - fullNet
@@ -44,18 +46,29 @@ function Hero() {
         <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <div className="text-sm text-muted">{greeting()}.</div>
-            <div className="mt-5 text-[11px] uppercase tracking-[0.12em] text-faint">Full net worth</div>
-            <Money report amount={fullNet} animate className="font-serif text-5xl text-ink md:text-6xl" />
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+            <div className="mt-5 text-[11px] uppercase tracking-[0.12em] text-faint">Net worth · regular boxes</div>
+            <Money report amount={fullNet} animate className="font-serif text-3xl text-ink sm:text-5xl md:text-6xl" />
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm text-muted">
               <span>with planned goals</span>
-              <Money report amount={goalNet} compact className="font-medium tabular text-ink" />
+              <Money report reportInline amount={goalNet} compact className="font-medium tabular text-ink" />
               <Money
                 report
+                reportInline
                 amount={goalDelta}
                 compact
                 sign
                 className={goalDelta < 0 ? 'tabular text-rust' : 'tabular text-sage'}
               />
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+              <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span>including assets</span>
+                <Money report reportInline amount={includingAssets} compact className="tabular text-ink" />
+              </span>
+              <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span>with planned goals</span>
+                <Money report reportInline amount={includingAssetsWithGoals} compact className="tabular text-ink" />
+              </span>
             </div>
           </div>
 
