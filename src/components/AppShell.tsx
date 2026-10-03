@@ -14,7 +14,7 @@ function NetWorthSummary() {
   const net = useNetWorth(undefined, false)
   const includingAssets = useNetWorth()
   return (
-    <div className="rounded-2xl border border-line bg-sunken/40 px-5 py-5">
+    <div className="px-2">
       <div className="text-[11px] uppercase tracking-[0.1em] text-faint">Net worth · regular boxes</div>
       <Money
         report
@@ -23,7 +23,7 @@ function NetWorthSummary() {
         compact={false}
         className="mt-2 block font-serif text-[1.6rem] leading-tight text-ink"
       />
-      <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 border-t border-line pt-3 text-xs text-muted">
+      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2 border-t border-line pt-2 text-xs text-muted">
         <span>Including assets</span>
         <Money amount={includingAssets} compact className="text-ink" />
       </div>
@@ -37,7 +37,7 @@ function SidebarNavItem({ item }: { item: NavItemDef }) {
       {({ isActive }) => (
         <span
           className={cn(
-            'relative flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors duration-200',
+            'relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200',
             isActive ? 'text-ink' : 'text-faint hover:text-muted',
           )}
         >
@@ -59,8 +59,8 @@ function SidebarNavItem({ item }: { item: NavItemDef }) {
 function DesktopSidebar() {
   const composer = useComposer()
   return (
-    <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col border-r border-line bg-surface/40 px-4 py-6 md:flex xl:w-80">
-      <Link to="/" className="mb-7 flex items-center gap-2.5 px-2">
+    <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col border-r border-line bg-surface/40 px-3 py-4 md:flex">
+      <Link to="/" className="mb-5 flex items-center gap-2.5 px-2">
         <BrandMark />
         <div className="leading-none">
           <div className="font-serif text-lg text-ink">Money</div>
@@ -70,7 +70,7 @@ function DesktopSidebar() {
 
       <NetWorthSummary />
 
-      <nav className="mt-7 flex flex-1 flex-col gap-1.5">
+      <nav className="mt-5 flex flex-1 flex-col gap-1">
         {NAV.map((item) => (
           <SidebarNavItem key={item.to} item={item} />
         ))}

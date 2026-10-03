@@ -51,4 +51,34 @@ describe('box chart adapter', () => {
   it('has no currency groups for an empty world', () => {
     expect(buildBoxCharts(state([]), '2026-01-01')).toEqual([])
   })
+
+  it('groups assets separately even when they share account currencies', () => {
+    const data = state([
+      box('cash', 'EUR', 50), box('bank', 'USD', 200),
+      box('laptop', 'EUR', 1000, { kind: 'asset' }),
+      box('camera', 'USD', 400, { kind: 'asset' }),
+      box('old-asset', 'EUR', 999, { kind: 'asset', archived: true }),
+    ])
+    const groups = buildBoxCharts(data, '2030-01-01')
+    expect(groups.map((group) => group.label)).toEqual(['EUR', 'USD', 'Assets'])
+    expect(groups[0].accounts.map((point) => point.id)).toEqual(['cash'])
+    expect(groups[1].accounts.map((point) => point.id)).toEqual(['bank'])
+    const assets = groups[2]
+    expect(assets.currency).toBe('EUR')
+    expect(assets.accounts.map((point) => point.id)).toEqual(['laptop', 'camera'])
+    expect(assets.total).toBeCloseTo(1200 * 0.9 ** 4, 6)
+    expect(assets.point.value).toBeCloseTo(1200 * 0.9 ** 4, 6)
+  })
+
+  it('keeps assets with missing rates visible without reporting a partial total', () => {
+    const groups = buildBoxCharts(state([
+      box('laptop', 'EUR', 1000, { kind: 'asset' }),
+      box('custom-asset', 'TOKEN', 5, { kind: 'asset' }),
+    ]), '2026-01-01')
+    expect(groups).toHaveLength(1)
+    expect(groups[0].label).toBe('Assets')
+    expect(groups[0].accounts.map((point) => point.value)).toEqual([1000, null])
+    expect(groups[0].total).toBeNull()
+    expect(groups[0].point.value).toBeNull()
+  })
 })
