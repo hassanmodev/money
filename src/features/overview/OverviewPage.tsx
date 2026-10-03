@@ -17,6 +17,7 @@ import type { Box } from '@/domain'
 import { Card, Money, Sparkline, Switch } from '@/ui'
 import { boxIcon, KIND_LABEL } from '@/ui/icons'
 import { ActivityList } from '@/features/transactions/ActivityList'
+import { ActivityStats } from '@/features/transactions/ActivityStats'
 
 function greeting() {
   const h = new Date().getHours()
@@ -126,6 +127,7 @@ export default function OverviewPage() {
   return (
     <Page>
       <Hero />
+      <ActivityStats />
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <section>
           <SectionHead title="Your boxes" to="/boxes" />

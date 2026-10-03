@@ -5,6 +5,7 @@ import { Card } from '@/ui'
 import { Button } from '@/ui'
 import { useComposer } from './ComposerProvider'
 import { ActivityList } from './ActivityList'
+import { ActivityStats } from './ActivityStats'
 
 export default function ActivityPage() {
   const composer = useComposer()
@@ -20,6 +21,7 @@ export default function ActivityPage() {
           </Button>
         }
       />
+      <ActivityStats />
       <Card className="p-3 md:p-4">
         <ActivityList />
       </Card>
