@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import {
   bankedHappiness,
   boxValueAt,
+  boxPerformanceAt,
   goalBudgetCurve,
   goalFundingBoxes,
   goalFundingBudget,
@@ -34,18 +35,25 @@ const PLAN_HORIZON_MONTHS = 48
 export function useFinanceState(): FinanceState {
   const boxes = useStore((s) => s.boxes)
   const transactions = useStore((s) => s.transactions)
+  const activityBlueprints = useStore((s) => s.activityBlueprints)
   const goals = useStore((s) => s.goals)
   const goalGroups = useStore((s) => s.goalGroups)
   const settings = useStore((s) => s.settings)
   return useMemo(
-    () => ({ boxes, transactions, goals, goalGroups, settings }),
-    [boxes, transactions, goals, goalGroups, settings],
+    () => ({ boxes, transactions, activityBlueprints, goals, goalGroups, settings }),
+    [boxes, transactions, activityBlueprints, goals, goalGroups, settings],
   )
 }
 
 export function useActiveBoxes() {
   const boxes = useStore((s) => s.boxes)
   return useMemo(() => boxes.filter((b) => !b.archived), [boxes])
+}
+
+/** Accounts that can send, receive, and spend money. */
+export function useMoneyBoxes() {
+  const boxes = useActiveBoxes()
+  return useMemo(() => boxes.filter((b) => b.kind !== 'asset'), [boxes])
 }
 
 export function useGoals(): Goal[] {
@@ -198,6 +206,13 @@ export function useBoxValue(boxId: string, dateISO?: string): number {
   const date = dateISO ?? view
   const planned = usePlannedBuys()
   return useMemo(() => boxValueAt(state, boxId, date, planned), [state, boxId, date, planned])
+}
+
+export function useBoxPerformance(boxId: string) {
+  const state = useFinanceState()
+  const date = useNow()
+  const planned = usePlannedBuys()
+  return useMemo(() => boxPerformanceAt(state, boxId, date, planned), [state, boxId, date, planned])
 }
 
 /**

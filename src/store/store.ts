@@ -11,8 +11,9 @@ import type {
   GoalValue,
   Settings,
   Transaction,
+  Valuation,
 } from '@/domain'
-import { setCustomCurrencies } from '@/domain'
+import { ActivityLedger, setCustomCurrencies } from '@/domain'
 import { newId } from '@/lib/id'
 import { todayISO } from '@/lib/date'
 import { createEmpty, createSeed } from './seed'
@@ -30,10 +31,13 @@ interface Actions {
 
   upsertEffect: (boxId: string, effect: Effect) => void
   removeEffect: (boxId: string, effectId: string) => void
+  upsertValuation: (boxId: string, valuation: Valuation) => void
+  removeValuation: (boxId: string, valuationId: string) => void
 
   addTransaction: (tx: NewTransaction) => string
   updateTransaction: (id: string, patch: Partial<Transaction>) => void
   removeTransaction: (id: string) => void
+  stopBlueprint: (id: string) => void
 
   addGoal: (goal: NewGoal) => string
   updateGoal: (id: string, patch: Partial<Goal>) => void
@@ -78,6 +82,7 @@ export const useStore = create<Store>()(
   persist(
     (set) => ({
       ...createSeed(),
+      ...new ActivityLedger(createSeed()).migrate(),
 
       addBox: (box) => {
         const id = newId('box')
@@ -95,6 +100,8 @@ export const useStore = create<Store>()(
           transactions: s.transactions.filter(
             (t) => t.boxId !== id && t.toBoxId !== id,
           ),
+          activityBlueprints: (s.activityBlueprints ?? []).filter((blueprint) =>
+            !blueprint.versions.some((v) => v.boxId === id || v.toBoxId === id)),
         })),
       reorderBoxes: (orderedActiveIds) =>
         set((s) => {
@@ -133,17 +140,60 @@ export const useStore = create<Store>()(
           ),
         })),
 
+      upsertValuation: (boxId, valuation) =>
+        set((s) => ({
+          boxes: s.boxes.map((box) => box.id !== boxId ? box : {
+            ...box,
+            valuations: [...(box.valuations ?? []).filter((v) => v.id !== valuation.id && v.date !== valuation.date), valuation],
+          }),
+        })),
+      removeValuation: (boxId, valuationId) =>
+        set((s) => ({
+          boxes: s.boxes.map((box) => box.id !== boxId ? box : {
+            ...box, valuations: (box.valuations ?? []).filter((v) => v.id !== valuationId),
+          }),
+        })),
+
       addTransaction: (tx) => {
         const id = newId('tx')
-        set((s) => ({ transactions: [...s.transactions, { ...tx, id, createdAt: now() }] }))
+        const transaction = { ...tx, id, createdAt: now() }
+        set((s) => tx.recurrence
+          ? { activityBlueprints: [...(s.activityBlueprints ?? []), ActivityLedger.blueprint(transaction)] }
+          : { transactions: [...s.transactions, transaction] })
         return id
       },
       updateTransaction: (id, patch) =>
-        set((s) => ({
-          transactions: s.transactions.map((t) => (t.id === id ? { ...t, ...patch } : t)),
-        })),
+        set((s) => {
+          const blueprint = s.activityBlueprints?.find((b) => b.id === id)
+          if (blueprint) return {
+            activityBlueprints: s.activityBlueprints!.map((b) => b.id === id
+              ? new ActivityLedger(s).revise(b, patch, todayISO()) : b),
+          }
+          let existing = s.transactions.find((t) => t.id === id)
+          if (!existing) {
+            const date = id.slice(-10)
+            existing = new ActivityLedger(s).between(date, date).find((t) => t.id === id)
+          }
+          if (!existing) return {}
+          const tx = { ...existing, ...patch, id }
+          if (tx.recurrence) return {
+            transactions: s.transactions.filter((t) => t.id !== id),
+            activityBlueprints: [...(s.activityBlueprints ?? []), ActivityLedger.blueprint(tx)],
+          }
+          return { transactions: [...s.transactions.filter((t) => t.id !== id), tx] }
+        }),
       removeTransaction: (id) =>
-        set((s) => ({ transactions: s.transactions.filter((t) => t.id !== id) })),
+        set((s) => ({
+          transactions: s.transactions.filter((t) => t.id !== id),
+          activityBlueprints: (s.activityBlueprints ?? []).map((b) => {
+            if (!id.startsWith(`${b.id}:`)) return b
+            return { ...b, skippedDates: [...(b.skippedDates ?? []), id.slice(b.id.length + 1)] }
+          }),
+        })),
+      stopBlueprint: (id) => set((s) => ({
+        activityBlueprints: (s.activityBlueprints ?? []).map((b) => b.id === id
+          ? { ...b, stoppedOn: todayISO() } : b),
+      })),
 
       addGoal: (goal) => {
         const id = newId('goal')
@@ -208,18 +258,18 @@ export const useStore = create<Store>()(
       resetAll: () => {
         const seed = createSeed()
         setCustomCurrencies(seed.settings.customCurrencies)
-        return set({ ...seed })
+        return set({ ...seed, ...new ActivityLedger(seed).migrate() })
       },
 
       clearAll: () => {
         const empty = createEmpty()
         setCustomCurrencies(empty.settings.customCurrencies)
-        return set({ ...empty })
+        return set({ ...empty, activityBlueprints: [] })
       },
     }),
     {
       name: 'cozy-money/v1',
-      version: 5,
+      version: 6,
       // Older saves predate goals — fold in an empty list so the engine is safe.
       // v3 moved funding from per-goal `boxIds` onto a box `fundsGoals` flag:
       // any box a goal used to draw from joins the shared pool, and the now-dead
@@ -248,12 +298,14 @@ export const useStore = create<Store>()(
             value: migrateGoalValueToHundred(g.value),
           }))
         }
+        if (version < 6) Object.assign(s, new ActivityLedger({ transactions: s.transactions ?? [] }).migrate())
         return s as FinanceState
       },
       // persist only the data, never the action functions
       partialize: (s): FinanceState => ({
         boxes: s.boxes,
         transactions: s.transactions,
+        activityBlueprints: s.activityBlueprints,
         goals: s.goals,
         goalGroups: s.goalGroups,
         settings: s.settings,
@@ -270,7 +322,7 @@ export const useStore = create<Store>()(
 /** Read the live state outside React (e.g. for one-off calculations). */
 export const financeState = (): FinanceState => {
   const s = useStore.getState()
-  return { boxes: s.boxes, transactions: s.transactions, goals: s.goals, goalGroups: s.goalGroups, settings: s.settings }
+  return { boxes: s.boxes, transactions: s.transactions, activityBlueprints: s.activityBlueprints, goals: s.goals, goalGroups: s.goalGroups, settings: s.settings }
 }
 
 export { todayISO }

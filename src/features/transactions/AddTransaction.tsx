@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { currencyMeta, type Recurrence, type Transaction, type TxKind } from '@/domain'
 import { cn } from '@/lib/cn'
 import { todayISO } from '@/lib/date'
-import { useActiveBoxes } from '@/store/selectors'
+import { useMoneyBoxes } from '@/store/selectors'
 import { useStore } from '@/store/store'
 import { Button, Field, Input, Segmented, Sheet, Textarea } from '@/ui'
 import { boxIcon } from '@/ui/icons'
@@ -33,7 +33,7 @@ function BoxChips({
   onChange: (id: string) => void
   exclude?: string
 }) {
-  const boxes = useActiveBoxes()
+  const boxes = useMoneyBoxes()
   return (
     <div className="flex flex-wrap gap-2">
       {boxes
@@ -71,9 +71,10 @@ export function AddTransaction({
   prefill: ComposerPrefill
   editing?: Transaction | null
 }) {
-  const boxes = useActiveBoxes()
+  const boxes = useMoneyBoxes()
   const addTransaction = useStore((s) => s.addTransaction)
   const updateTransaction = useStore((s) => s.updateTransaction)
+  const blueprint = useStore((s) => s.activityBlueprints?.find((b) => b.id === editing?.id))
 
   const [kind, setKind] = useState<TxKind>('expense')
   const [boxId, setBoxId] = useState('')
@@ -97,9 +98,9 @@ export function AddTransaction({
       setRecurrence(editing.recurrence ?? null)
       return
     }
-    const first = prefill.boxId ?? boxes[0]?.id ?? ''
+    const first = boxes.find((b) => b.id === prefill.boxId)?.id ?? boxes[0]?.id ?? ''
     const prefilledTo =
-      prefill.toBoxId && prefill.toBoxId !== first
+      prefill.toBoxId && prefill.toBoxId !== first && boxes.some((b) => b.id === prefill.toBoxId)
         ? prefill.toBoxId
         : undefined
     const second = prefilledTo ?? boxes.find((b) => b.id !== first)?.id ?? ''
@@ -125,11 +126,12 @@ export function AddTransaction({
   }
 
   const valid =
-    amount > 0 && boxId && (kind === 'transfer' || validCategory(category)) && (kind !== 'transfer' || (toBoxId && toBoxId !== boxId))
+    (!blueprint || !!recurrence) && Number.isFinite(amount) && amount > 0 && !!date && !!sourceBox && (kind === 'transfer' || validCategory(category)) && (kind !== 'transfer' || (boxes.some((b) => b.id === toBoxId) && toBoxId !== boxId))
 
   const save = () => {
     if (!valid) return
     const fields = {
+      blueprintId: editing?.blueprintId,
       kind,
       boxId,
       toBoxId: kind === 'transfer' ? toBoxId : undefined,
@@ -146,7 +148,7 @@ export function AddTransaction({
   }
 
   const noun = kind === 'expense' ? 'expense' : kind === 'income' ? 'income' : 'transfer'
-  const title = editing
+  const title = blueprint ? 'Edit blueprint' : editing
     ? `Edit ${noun}`
     : kind === 'expense'
       ? 'New expense'
@@ -171,6 +173,14 @@ export function AddTransaction({
       }
     >
       <div className="flex flex-col gap-6">
+        {blueprint && <p className="text-sm text-muted">Changes apply from today onward. Earlier activities keep their original amounts and dates. Keep a repeating rhythm, or stop the blueprint from its menu.</p>}
+        {editing?.blueprintId && !blueprint && <p className="text-sm text-muted">Changes apply to this activity only.</p>}
+        {boxes.length === 0 && (
+          <p className="text-sm text-muted">Create a cash or account box to record transactions. Assets track the value of things you own.</p>
+        )}
+        {editing && (!sourceBox || (kind === 'transfer' && !boxes.some((b) => b.id === toBoxId))) && boxes.length > 0 && (
+          <p className="text-sm text-muted">Choose accounts for this transaction before saving. Assets cannot send or receive money.</p>
+        )}
         <Segmented value={kind} onChange={setKind} options={KIND_OPTIONS} className="w-full [&>button]:flex-1" />
 
         {/* Amount */}
@@ -212,9 +222,9 @@ export function AddTransaction({
             />
           </Field>
 
-          <Field label="Rhythm" hint="One-time, or a repeating beat into the future.">
+          {(!editing?.blueprintId || blueprint) && <Field label="Rhythm" hint="Repeating entries create a blueprint for linked activities.">
             <RhythmControl value={recurrence} onChange={setRecurrence} anchor={date} />
-          </Field>
+          </Field>}
 
           <Field label="Note">
             <Textarea

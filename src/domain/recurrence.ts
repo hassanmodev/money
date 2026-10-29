@@ -57,7 +57,7 @@ export function occurrencesBetween(
     if (isAfter(d, toD)) break
     if (hardEnd && isAfter(d, hardEnd)) break
     if (!isBefore(d, fromD)) out.push(toISO(d)) // d >= from
-    d = step(d, every, rec.unit)
+    d = step(parseISO(rec.anchor), every * (i + 1), rec.unit)
   }
   return out
 }
@@ -91,7 +91,7 @@ export function recurrenceAmountsBetween(
     if (isAfter(periodStart, toD)) break
     if (hardEnd && isAfter(periodStart, hardEnd)) break
 
-    const periodEnd = step(periodStart, every, rec.unit)
+    const periodEnd = step(parseISO(rec.anchor), every * (i + 1), rec.unit)
     const days = Math.max(1, differenceInCalendarDays(periodEnd, periodStart))
     const dailyAmount = amount / days
     let day = periodStart
@@ -127,7 +127,7 @@ export function nextOccurrences(
     if (i >= maxCount) break
     if (hardEnd && isAfter(d, hardEnd)) break
     if (!isBefore(d, fromD)) out.push(toISO(d))
-    d = step(d, every, rec.unit)
+    d = step(parseISO(rec.anchor), every * (i + 1), rec.unit)
   }
   return out
 }

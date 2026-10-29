@@ -88,6 +88,15 @@ export interface Forward {
   share: number // 0..1
 }
 
+/** An observed total value, in the box's currency, after that day's cash movements. */
+export interface Valuation {
+  id: string
+  date: ISODate
+  value: number
+  note?: string
+  createdAt: ISODateTime
+}
+
 export interface Box {
   id: string
   name: string
@@ -98,6 +107,7 @@ export interface Box {
   color: string // hex from the curated swatch palette
   icon?: string // optional lucide icon name override
   effects: Effect[]
+  valuations?: Valuation[]
   /**
    * Tiered take-rate for incoming money, ascending by level. Absent or empty
    * means the box keeps everything it's offered.
@@ -140,6 +150,7 @@ export type TxKind = 'expense' | 'income' | 'transfer'
 
 export interface Transaction {
   id: string
+  blueprintId?: string
   kind: TxKind
   /** source box (expense / transfer-out) or destination box (income) */
   boxId: string
@@ -152,6 +163,19 @@ export interface Transaction {
   date: ISODate
   recurrence?: Recurrence
   createdAt: ISODateTime
+}
+
+export interface ActivityBlueprintVersion extends Omit<Transaction, 'id' | 'createdAt' | 'blueprintId'> {
+  effectiveFrom: ISODate
+  recurrence: Recurrence
+}
+
+export interface ActivityBlueprint {
+  id: string
+  createdAt: ISODateTime
+  versions: ActivityBlueprintVersion[]
+  stoppedOn?: ISODate
+  skippedDates?: ISODate[]
 }
 
 /** Where a goal sits in its life: still wanted, achieved, or shelved. */
@@ -263,6 +287,7 @@ export interface Settings {
 export interface FinanceState {
   boxes: Box[]
   transactions: Transaction[]
+  activityBlueprints?: ActivityBlueprint[]
   goals: Goal[]
   /** alternative-sets the goals reference by id; absent on pre-feature saves */
   goalGroups: GoalGroup[]

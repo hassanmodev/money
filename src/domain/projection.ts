@@ -15,7 +15,7 @@ import { format, parseISO } from 'date-fns'
 import { realDiscount } from './effects'
 import { FlowNetwork } from './flow'
 import { toBase, convert } from './money'
-import { recurrenceAmountsBetween } from './recurrence'
+import { ActivityLedger } from './ActivityLedger'
 import type {
   Box,
   CurrencyCode,
@@ -95,12 +95,8 @@ interface Occurrence {
 }
 
 /** Expand one transaction into concrete dated occurrences within [from, to]. */
-function expand(tx: Transaction, from: ISODate, to: ISODate): Occurrence[] {
-  const amounts = tx.recurrence
-    ? recurrenceAmountsBetween(tx.recurrence, tx.amount, from, to)
-    : tx.date >= from && tx.date <= to
-      ? [{ date: tx.date, amount: tx.amount }]
-      : []
+function expand(tx: Transaction): Occurrence[] {
+  const amounts = [{ date: tx.date, amount: tx.amount }]
   return amounts.map(({ date, amount }) => ({
     t: parseISO(date).getTime(),
     kind: tx.kind,
@@ -148,7 +144,7 @@ function goalOutflows(
   baseCurrency: CurrencyCode,
   planned: PlannedBuy[] = [],
 ): Transaction[] {
-  const pool = boxes.filter((b) => b.fundsGoals).map((b) => b.id)
+  const pool = boxes.filter((b) => b.kind !== 'asset' && b.fundsGoals).map((b) => b.id)
   const out: Transaction[] = []
   for (const g of goals) {
     if (g.status !== 'done' || !g.doneDate) continue
@@ -160,13 +156,13 @@ function goalOutflows(
   return out
 }
 
-// Same-instant ordering: a box opens, then money leaves, then money arrives —
-// so an inflow sees the up-to-date balance its acceptance curve depends on.
+// Opening, cash out, cash in, closing valuation, then sample.
 type SimEvent =
   | { t: number; ord: 0; kind: 'open'; id: string }
   | { t: number; ord: 1; kind: 'out'; id: string; amount: number }
   | { t: number; ord: 2; kind: 'in'; id: string; amount: number }
-  | { t: number; ord: 3; kind: 'sample'; index: number }
+  | { t: number; ord: 3; kind: 'valuation'; id: string; amount: number }
+  | { t: number; ord: 4; kind: 'sample'; index: number }
 
 /**
  * Walk `boxes` through time and record each box's value (its own currency) at
@@ -178,7 +174,8 @@ function simulate(
   transactions: Transaction[],
   settings: Settings,
   sampleTimes: number[],
-): Record<string, number[]> {
+  activityBlueprints: FinanceState['activityBlueprints'],
+): { values: Record<string, number[]>; contributions: Record<string, number> } {
   const byId = new Map(boxes.map((b) => [b.id, b]))
   const inBox = (amount: number, from: CurrencyCode, to: CurrencyCode) =>
     convert(amount, from, to, settings)
@@ -193,11 +190,17 @@ function simulate(
   )
   const fromISO = iso(Math.min(earliestOpen, firstSample))
   const toISO = iso(lastSample)
-  const occ = transactions.flatMap((tx) => expand(tx, fromISO, toISO))
+  const occ = new ActivityLedger({ transactions, activityBlueprints }).between(fromISO, toISO).flatMap(expand)
 
   const events: SimEvent[] = []
   for (const b of boxes) {
-    events.push({ t: parseISO(b.openingDate).getTime(), ord: 0, kind: 'open', id: b.id })
+    const openingTime = parseISO(b.openingDate).getTime()
+    if (openingTime <= lastSample) events.push({ t: openingTime, ord: 0, kind: 'open', id: b.id })
+    const valuations = [...(b.valuations ?? [])].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+    for (const valuation of valuations) {
+      if (valuation.date < b.openingDate || valuation.date > toISO || !Number.isFinite(valuation.value)) continue
+      events.push({ t: parseISO(valuation.date).getTime(), ord: 3, kind: 'valuation', id: b.id, amount: valuation.value })
+    }
   }
   for (const o of occ) {
     const src = byId.get(o.boxId)
@@ -212,7 +215,7 @@ function simulate(
       if (dst) events.push({ t: o.t, ord: 2, kind: 'in', id: dst.id, amount: inBox(o.amount, o.currency, dst.currency) })
     }
   }
-  sampleTimes.forEach((t, index) => events.push({ t, ord: 3, kind: 'sample', index }))
+  sampleTimes.forEach((t, index) => events.push({ t, ord: 4, kind: 'sample', index }))
 
   events.sort((a, b) => a.t - b.t || a.ord - b.ord)
 
@@ -232,6 +235,9 @@ function simulate(
       case 'in':
         net.deposit(ev.id, ev.amount)
         break
+      case 'valuation':
+        net.revalue(ev.id, ev.amount)
+        break
       case 'sample': {
         const snap = net.snapshot()
         for (const b of boxes) out[b.id][ev.index] = snap[b.id]
@@ -239,7 +245,7 @@ function simulate(
       }
     }
   }
-  return out
+  return { values: out, contributions: net.contributions() }
 }
 
 export function project(
@@ -261,7 +267,7 @@ export function project(
   const sampleDates = sampleTimes.map(iso)
 
   const txns = [...state.transactions, ...goalOutflows(goals, active, settings.baseCurrency, plannedBuys)]
-  const series = simulate(active, txns, settings, sampleTimes)
+  const { values: series } = simulate(active, txns, settings, sampleTimes, state.activityBlueprints)
   const perBoxBase: Record<string, number[]> = {}
   for (const box of active) {
     perBoxBase[box.id] = series[box.id].map((v) => toBase(v, box.currency, settings))
@@ -325,15 +331,31 @@ export function boxValueAt(
     ? active
     : state.boxes.filter((b) => b.id === boxId)
   const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], boxes, state.settings.baseCurrency, plannedBuys)]
-  const series = simulate(boxes, txns, state.settings, [parseISO(dateISO).getTime()])
+  const { values: series } = simulate(boxes, txns, state.settings, [parseISO(dateISO).getTime()], state.activityBlueprints)
   return series[boxId]?.[0] ?? 0
+}
+
+/** Value and lifetime gain, excluding cash movements, in the box's own currency. */
+export function boxPerformanceAt(
+  state: FinanceState,
+  boxId: string,
+  dateISO: ISODate,
+  plannedBuys: PlannedBuy[] = [],
+) {
+  const active = state.boxes.filter((b) => !b.archived)
+  const boxes = active.some((b) => b.id === boxId) ? active : state.boxes.filter((b) => b.id === boxId)
+  const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], boxes, state.settings.baseCurrency, plannedBuys)]
+  const result = simulate(boxes, txns, state.settings, [parseISO(dateISO).getTime()], state.activityBlueprints)
+  const value = result.values[boxId]?.[0] ?? 0
+  const netContributions = result.contributions[boxId] ?? 0
+  return { value, netContributions, gain: value - netContributions }
 }
 
 /** Total net worth on a date, in the base currency. */
 export function netWorthAt(state: FinanceState, dateISO: ISODate, plannedBuys: PlannedBuy[] = [], includeAssets = true): number {
   const active = state.boxes.filter((b) => !b.archived)
   const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], active, state.settings.baseCurrency, plannedBuys)]
-  const series = simulate(active, txns, state.settings, [parseISO(dateISO).getTime()])
+  const { values: series } = simulate(active, txns, state.settings, [parseISO(dateISO).getTime()], state.activityBlueprints)
   return active.reduce(
     (sum, b) => sum + (!includeAssets && b.kind === 'asset' ? 0 : toBase(series[b.id][0], b.currency, state.settings)),
     0,
@@ -355,10 +377,10 @@ export interface GoalFundingBox {
  */
 export function goalFundingBoxes(state: FinanceState, dateISO: ISODate): GoalFundingBox[] {
   const active = state.boxes.filter((b) => !b.archived)
-  const pool = active.filter((b) => b.fundsGoals)
+  const pool = active.filter((b) => b.kind !== 'asset' && b.fundsGoals)
   if (pool.length === 0) return []
   const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], active, state.settings.baseCurrency)]
-  const series = simulate(active, txns, state.settings, [parseISO(dateISO).getTime()])
+  const { values: series } = simulate(active, txns, state.settings, [parseISO(dateISO).getTime()], state.activityBlueprints)
   return pool.map((b) => ({ boxId: b.id, base: toBase(series[b.id][0], b.currency, state.settings) }))
 }
 
@@ -394,10 +416,10 @@ export function goalFundingBudget(state: FinanceState, dateISO: ISODate): number
  */
 export function goalBudgetCurve(state: FinanceState, grid: ISODate[]): number[] {
   const active = state.boxes.filter((b) => !b.archived)
-  const funders = active.filter((b) => b.fundsGoals)
+  const funders = active.filter((b) => b.kind !== 'asset' && b.fundsGoals)
   if (funders.length === 0 || grid.length === 0) return grid.map(() => 0)
   const txns = [...state.transactions, ...goalOutflows(state.goals ?? [], active, state.settings.baseCurrency)]
-  const series = simulate(active, txns, state.settings, grid.map((d) => parseISO(d).getTime()))
+  const { values: series } = simulate(active, txns, state.settings, grid.map((d) => parseISO(d).getTime()), state.activityBlueprints)
   return grid.map((_, i) => {
     const pool = funders.reduce((sum, b) => sum + toBase(series[b.id][i], b.currency, state.settings), 0)
     return spendableGoalBudget(pool, state.settings)

@@ -18,6 +18,7 @@ import { Card, Money, Sparkline, Switch } from '@/ui'
 import { boxIcon, KIND_LABEL } from '@/ui/icons'
 import { ActivityList } from '@/features/transactions/ActivityList'
 import { ActivityStats } from '@/features/transactions/ActivityStats'
+import { CollapsibleBoxes } from '@/features/boxes/CollapsibleBoxes'
 
 function greeting() {
   const h = new Date().getHours()
@@ -144,11 +145,13 @@ export default function OverviewPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <section>
           <SectionHead title="Your boxes" to="/boxes" />
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {boxes.map((b) => (
-              <BoxTile key={b.id} box={b} />
-            ))}
-          </div>
+          <CollapsibleBoxes boxes={boxes} tiles>
+            {(visible) => (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {visible.map((b) => <BoxTile key={b.id} box={b} />)}
+              </div>
+            )}
+          </CollapsibleBoxes>
         </section>
         <section>
           <SectionHead title="Recent activity" to="/activity" />

@@ -8,6 +8,7 @@ import { Button } from '@/ui'
 import { useComposer } from './ComposerProvider'
 import { ActivityList } from './ActivityList'
 import { ActivityStats } from './ActivityStats'
+import { BlueprintList } from './BlueprintList'
 
 export default function ActivityPage() {
   const composer = useComposer()
@@ -30,6 +31,7 @@ export default function ActivityPage() {
         <p className="mt-2 text-xs text-faint">Matches any whole segment or path. Filters the spending tree, entries table, and activity feed; summary totals stay unchanged.</p>
       </div>
       <ActivityStats categoryQuery={categoryQuery} />
+      <BlueprintList categoryQuery={categoryQuery} />
       <Card className="p-3 md:p-4">
         <ActivityList categoryQuery={categoryQuery} />
       </Card>

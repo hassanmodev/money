@@ -23,6 +23,7 @@
  * the rest of `src/domain`.
  */
 import { parseISO } from 'date-fns'
+import { boxEffects } from './boxRules'
 import { growthFactor, nominalFactor } from './effects'
 import { convert } from './money'
 import type { AcceptancePoint, Box, Forward, Settings } from './types'
@@ -194,8 +195,8 @@ export class FlowNode {
   /** `forwards` must already be filtered to targets that actually exist. */
   constructor(box: Box, forwards: readonly Forward[]) {
     this.box = box
-    this.curve = new AcceptanceCurve(box.acceptance)
-    this.routing = new RoutingTable(forwards)
+    this.curve = new AcceptanceCurve(box.kind === 'asset' ? undefined : box.acceptance)
+    this.routing = new RoutingTable(box.kind === 'asset' ? [] : forwards)
   }
 
   /** True when the box keeps everything and forwards nothing — a plain bucket. */
@@ -204,7 +205,7 @@ export class FlowNode {
   }
 
   valueFactor(years: number, settings: Settings): number {
-    const factor = nominalFactor(this.box.effects, years)
+    const factor = nominalFactor(boxEffects(this.box.kind, this.box.effects), years)
     if (this.box.kind !== 'asset' || this.box.effects.some((e) => e.kind === 'depreciation')) return factor
     return factor * growthFactor(-(settings.assetDepreciation ?? 0.1), 'annually', years)
   }
@@ -232,19 +233,21 @@ export class FlowNode {
 export class FlowNetwork {
   private readonly nodes = new Map<string, FlowNode>()
   private readonly level = new Map<string, number>()
+  private readonly capital = new Map<string, number>()
   private readonly lastT = new Map<string, number>()
   private readonly settings: Settings
   private now = -Infinity
 
   constructor(boxes: readonly Box[], settings: Settings) {
     this.settings = settings
-    const present = new Set(boxes.map((b) => b.id))
+    const present = new Set(boxes.filter((b) => b.kind !== 'asset').map((b) => b.id))
     for (const box of boxes) {
       const forwards = (box.forwards ?? []).filter(
         (f) => f.toBoxId !== box.id && present.has(f.toBoxId),
       )
       this.nodes.set(box.id, new FlowNode(box, forwards))
       this.level.set(box.id, 0)
+      this.capital.set(box.id, 0)
       this.lastT.set(box.id, parseISO(box.openingDate).getTime())
     }
   }
@@ -269,7 +272,9 @@ export class FlowNetwork {
   /** Seed a box's opening balance (not subject to its own curve/forwards). */
   open(id: string): void {
     this.advance(id)
-    this.level.set(id, this.level.get(id)! + this.nodes.get(id)!.box.openingBalance)
+    const opening = this.nodes.get(id)!.box.openingBalance
+    this.level.set(id, this.level.get(id)! + opening)
+    this.capital.set(id, this.capital.get(id)! + opening)
   }
 
   /** Take money out of a box (an expense or a transfer's source leg). */
@@ -277,6 +282,19 @@ export class FlowNetwork {
     if (!this.nodes.has(id)) return
     this.advance(id)
     this.level.set(id, this.level.get(id)! - amount)
+    this.capital.set(id, this.capital.get(id)! - amount)
+  }
+
+  /** Revalue in place; gains and losses never enter the routing network. */
+  revalue(id: string, value: number): void {
+    if (!this.nodes.has(id) || !Number.isFinite(value)) return
+    this.advance(id)
+    this.level.set(id, value)
+  }
+
+  /** Opening value plus cash retained, less withdrawals, in each box's currency. */
+  contributions(): Record<string, number> {
+    return Object.fromEntries(this.capital)
   }
 
   /**
@@ -297,11 +315,14 @@ export class FlowNetwork {
       // Backstop: dust or a runaway cycle just settles where it stands.
       if (++hops > MAX_HOPS) {
         this.level.set(id, this.level.get(id)! + amt)
+        this.capital.set(id, this.capital.get(id)! + amt)
         continue
       }
 
-      const { level, pushes } = node.receive(this.level.get(id)!, amt)
+      const previous = this.level.get(id)!
+      const { level, pushes } = node.receive(previous, amt)
       this.level.set(id, level)
+      this.capital.set(id, this.capital.get(id)! + level - previous)
       for (const p of pushes) {
         const target = this.nodes.get(p.toBoxId)
         if (!target) continue

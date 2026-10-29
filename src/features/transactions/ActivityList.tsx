@@ -1,10 +1,10 @@
 import { CalendarClock, MoreHorizontal, Pencil, Repeat, Sparkles, Target, Trash2 } from 'lucide-react'
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { cadenceLabel, formatMoney, type Goal, type PlannedBuy, type Transaction } from '@/domain'
+import { ActivityLedger, cadenceLabel, formatMoney, type Goal, type PlannedBuy, type Transaction } from '@/domain'
 import { cn } from '@/lib/cn'
 import { fmtDateShort, relativeDay } from '@/lib/date'
-import { usePlannedBuys } from '@/store/selectors'
+import { useFinanceState, usePlannedBuys } from '@/store/selectors'
 import { useStore } from '@/store/store'
 import { useViewDate } from '@/store/time'
 import { Button, Chip, Menu, MenuItem, Money, MoneyEquivalents } from '@/ui'
@@ -20,6 +20,7 @@ const KIND_COLOR: Record<Transaction['kind'], string> = {
 function TransactionRow({ tx }: { tx: Transaction }) {
   const boxes = useStore((s) => s.boxes)
   const removeTransaction = useStore((s) => s.removeTransaction)
+  const blueprint = useStore((s) => s.activityBlueprints?.find((b) => b.id === tx.blueprintId))
   const composer = useComposer()
   const cat = categoryOf(tx.category)
   const Icon = cat.icon
@@ -61,6 +62,7 @@ function TransactionRow({ tx }: { tx: Transaction }) {
               {tx.recurrence.dailyAccrual && tx.recurrence.unit !== 'day' ? ' · daily' : ''}
             </Chip>
           )}
+          {tx.blueprintId && !tx.recurrence && <Chip className="gap-1 px-2 py-0.5 text-[10px]"><Repeat className="size-2.5" />Blueprint</Chip>}
         </div>
         <div className="truncate text-xs text-faint">{subtitle}</div>
       </div>
@@ -87,8 +89,12 @@ function TransactionRow({ tx }: { tx: Transaction }) {
         }
       >
         <MenuItem icon={Pencil} onSelect={() => composer.edit(tx)}>
-          Edit
+          {tx.blueprintId ? 'Edit activity' : 'Edit'}
         </MenuItem>
+        {blueprint && !blueprint.stoppedOn && <MenuItem icon={Repeat} onSelect={() => {
+          const current = new ActivityLedger({ transactions: [], activityBlueprints: [blueprint] }).current()[0]
+          if (current) composer.edit(current)
+        }}>Edit blueprint</MenuItem>}
         <MenuItem icon={Trash2} danger onSelect={() => removeTransaction(tx.id)}>
           Delete
         </MenuItem>
@@ -225,11 +231,17 @@ type FeedItem =
   | { kind: 'buy'; date: string; buy: PlannedBuy }
 
 export function ActivityList({ limit, boxId, categoryQuery = '' }: { limit?: number; boxId?: string; categoryQuery?: string }) {
-  const transactions = useStore((s) => s.transactions)
+  const state = useFinanceState()
   const goals = useStore((s) => s.goals)
   const baseCurrency = useStore((s) => s.settings.baseCurrency)
   const plannedBuys = usePlannedBuys()
   const cursor = useViewDate()
+  const transactions = useMemo(() => {
+    const starts = state.boxes.map((b) => b.openingDate)
+    for (const tx of state.transactions) starts.push(tx.date)
+    for (const b of state.activityBlueprints ?? []) starts.push(b.versions[0]?.effectiveFrom ?? cursor)
+    return new ActivityLedger(state).between(starts.sort()[0] ?? cursor, cursor)
+  }, [state, cursor])
 
   const { upcoming, groups } = useMemo(() => {
     const items: FeedItem[] = transactions

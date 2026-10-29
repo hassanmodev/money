@@ -1,6 +1,7 @@
 import { Target, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
+  boxEffects,
   currencyMeta,
   type AcceptancePoint,
   type Box,
@@ -119,12 +120,12 @@ export function BoxEditor({
   const symbol = currencyMeta(currency).symbol
   // Boxes this one can spill into — everything live except itself.
   const targets = useMemo(
-    () => allBoxes.filter((b) => b.id !== box?.id && !b.archived),
+    () => allBoxes.filter((b) => b.id !== box?.id && !b.archived && b.kind !== 'asset'),
     [allBoxes, box?.id],
   )
 
   const save = () => {
-    const cleanForwards = forwards.filter((f) => f.toBoxId && f.share > 0)
+    const cleanForwards = forwards.filter((f) => targets.some((b) => b.id === f.toBoxId) && f.share > 0)
     const data = {
       name: name.trim() || 'Untitled box',
       kind,
@@ -133,10 +134,10 @@ export function BoxEditor({
       openingDate,
       color,
       note: note.trim() || undefined,
-      effects,
-      acceptance: acceptance.length ? acceptance : undefined,
-      forwards: cleanForwards.length ? cleanForwards : undefined,
-      fundsGoals: fundsGoals || undefined,
+      effects: boxEffects(kind, effects),
+      acceptance: kind !== 'asset' && acceptance.length ? acceptance : undefined,
+      forwards: kind !== 'asset' && cleanForwards.length ? cleanForwards : undefined,
+      fundsGoals: kind !== 'asset' && fundsGoals || undefined,
       icon: box?.icon,
     }
     if (box) updateBox(box.id, data)
@@ -148,7 +149,7 @@ export function BoxEditor({
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      title={box ? 'Edit box' : kind === 'asset' ? 'New asset' : 'New box'}
+      title={box ? kind === 'asset' ? 'Edit asset' : 'Edit box' : kind === 'asset' ? 'New asset' : 'New box'}
       description={box ? undefined : kind === 'asset' ? 'Track a purchase and its value over time.' : 'A separate place your money lives, with its own rules.'}
       footer={
         <>
@@ -217,7 +218,7 @@ export function BoxEditor({
           <ColorPicker value={color} onChange={setColor} />
         </Field>
 
-        <Field
+        {kind !== 'asset' && <Field
           label="Funds goals"
           hint="Add this box to the shared pool your goal planner spends — the best goals draw from it first."
         >
@@ -251,11 +252,14 @@ export function BoxEditor({
               />
             </span>
           </button>
-        </Field>
+        </Field>}
 
         <Field
-          label="Effects"
-          hint="Rules that bend this box's value over time — interest, inflation, and the like."
+          label={kind === 'asset' ? 'Value changes' : kind === 'investment' || kind === 'crypto' ? 'Forecast effects' : 'Effects'}
+          hint={kind === 'asset' ? 'Appreciation and depreciation change the value of what you own.'
+            : kind === 'investment' || kind === 'crypto'
+              ? 'Estimated growth or decline between value updates. Use Update value in the box menu to record actual performance.'
+              : "Rules that bend this box's value over time — interest, inflation, and the like."}
         >
           {kind === 'asset' && !effects.some((e) => e.kind === 'depreciation') && (
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
@@ -265,10 +269,14 @@ export function BoxEditor({
               }])}>Set own depreciation</Button>
             </div>
           )}
-          <EffectEditor value={effects} onChange={setEffects} />
+          <EffectEditor
+            value={boxEffects(kind, effects)}
+            onChange={setEffects}
+            allowedKinds={kind === 'asset' ? ['depreciation', 'appreciation'] : undefined}
+          />
         </Field>
 
-        <Field
+        {kind !== 'asset' && <Field
           label="Spillover"
           hint="Keep only part of what flows in, and pass the rest on to other boxes."
         >
@@ -281,7 +289,7 @@ export function BoxEditor({
             color={color}
             targets={targets}
           />
-        </Field>
+        </Field>}
 
         <Field label="Note">
           <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything worth remembering…" />

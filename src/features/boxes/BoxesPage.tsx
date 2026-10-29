@@ -28,6 +28,7 @@ import { useComposer } from '@/features/transactions/ComposerProvider'
 import { BoxCard } from './BoxCard'
 import { BoxEditor } from './BoxEditor'
 import { BoxCharts } from './BoxCharts'
+import { CollapsibleBoxes } from './CollapsibleBoxes'
 
 type MoneyMoveEdge = 'income' | 'expense'
 type MoneyMoveMode = 'drag' | 'choose'
@@ -382,7 +383,7 @@ export default function BoxesPage() {
   ): MoneyMoveState => {
     const pointedBoxId = boxIdFromPoint(point)
     const hoverBoxId =
-      pointedBoxId && pointedBoxId !== sourceId ? pointedBoxId : undefined
+      pointedBoxId && pointedBoxId !== sourceId && regularBoxes.some((b) => b.id === pointedBoxId) ? pointedBoxId : undefined
     return {
       mode: 'drag',
       sourceId,
@@ -456,6 +457,7 @@ export default function BoxesPage() {
   }
 
   const openComposerForEdge = (sourceId: string, edge: MoneyMoveEdge) => {
+    if (!regularBoxes.some((b) => b.id === sourceId)) return
     composer.open({
       kind: edge === 'income' ? 'income' : 'expense',
       boxId: sourceId,
@@ -464,6 +466,7 @@ export default function BoxesPage() {
   }
 
   const openComposerForTransfer = (sourceId: string, targetId: string) => {
+    if (![sourceId, targetId].every((id) => regularBoxes.some((b) => b.id === id))) return
     composer.open({
       kind: 'transfer',
       boxId: sourceId,
@@ -474,6 +477,9 @@ export default function BoxesPage() {
   }
 
   const finishMoneyMove = (move: MoneyMoveState) => {
+    // Dropping on an asset cancels the move rather than booking an edge transaction.
+    const dropBoxId = move.pointer ? boxIdFromPoint(move.pointer) : undefined
+    if (assets.some((b) => b.id === dropBoxId)) return
     if (move.hoverBoxId && move.hoverBoxId !== move.sourceId) {
       openComposerForTransfer(move.sourceId, move.hoverBoxId)
       return
@@ -487,6 +493,7 @@ export default function BoxesPage() {
   }
 
   const startChooseMove = (sourceId: string, element?: HTMLElement | null) => {
+    if (!regularBoxes.some((b) => b.id === sourceId)) return
     const boxEl =
       element ??
       (document.querySelector(`[data-box-id="${sourceId}"]`) as HTMLElement | null)
@@ -504,7 +511,7 @@ export default function BoxesPage() {
     event: ReactPointerEvent<HTMLDivElement>,
     sourceId: string,
   ) => {
-    if (event.button !== 0 || moneyMoveRef.current?.mode === 'choose') return
+    if (event.button !== 0 || moneyMoveRef.current?.mode === 'choose' || !regularBoxes.some((b) => b.id === sourceId)) return
 
     const point = { x: event.clientX, y: event.clientY }
     const session: PointerSession = {
@@ -616,7 +623,7 @@ export default function BoxesPage() {
                 overId === b.id && draggingId !== b.id && 'ring-2 ring-clay/40',
                 moneyMove?.sourceId === b.id && 'ring-2 ring-clay/60 shadow-glow',
                 moneyMove?.hoverBoxId === b.id && 'scale-[1.015] ring-2 ring-sage/70 shadow-glow',
-                moneyMove?.mode === 'choose' && moneyMove.sourceId !== b.id && 'cursor-pointer',
+                moneyMove?.mode === 'choose' && moneyMove.sourceId !== b.id && b.kind !== 'asset' && 'cursor-pointer',
               )}
               draggable={!moneyMove}
               aria-grabbed={draggingId === b.id}
@@ -647,7 +654,7 @@ export default function BoxesPage() {
                   <GripVertical className="size-4" />
                 </div>
                 <BoxCard box={b} onEdit={() => openEdit(b)} />
-                <Tooltip content="Move money from this box">
+                {b.kind !== 'asset' && <Tooltip content="Move money from this box">
                   <button
                     type="button"
                     draggable={false}
@@ -662,7 +669,7 @@ export default function BoxesPage() {
                   >
                     <ArrowRightLeft className="size-4" />
                   </button>
-                </Tooltip>
+                </Tooltip>}
               </motion.div>
             </div>
           ))}
@@ -693,7 +700,7 @@ export default function BoxesPage() {
       {boxes.length === 0 ? (
         <EmptyState onNew={openNew} />
       ) : (
-        renderBoxes(regularBoxes)
+        <CollapsibleBoxes boxes={regularBoxes}>{renderBoxes}</CollapsibleBoxes>
       )}
 
       <section aria-labelledby="assets-heading" className="mt-8 border-t border-line pt-6">
@@ -707,7 +714,7 @@ export default function BoxesPage() {
             New asset
           </Button>
         </div>
-        {assets.length > 0 ? renderBoxes(assets) : (
+        {assets.length > 0 ? <CollapsibleBoxes boxes={assets}>{renderBoxes}</CollapsibleBoxes> : (
           <p className="rounded-xl border border-dashed border-line p-5 text-sm text-faint">
             Add an asset to track its value over time.
           </p>

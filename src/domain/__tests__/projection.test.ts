@@ -4,6 +4,7 @@ import {
   boxValueAt,
   goalBudgetCurve,
   goalFundingBudget,
+  goalFundingBoxes,
   netWorthAt,
   project,
   type PlannedBuy,
@@ -45,6 +46,52 @@ const state = (boxes: Box[], transactions: Transaction[] = [], goals: FinanceSta
 const FOUR_YEARS = { from: '2026-01-01', to: '2030-01-01' }
 
 describe('asset boxes', () => {
+  it('ignores legacy account effects and spillover rules on assets', () => {
+    const cash = box({ id: 'cash', openingBalance: 500 })
+    const asset = box({
+      kind: 'asset', openingBalance: 1000, effects: [interest(0.5)],
+      acceptance: [{ level: 0, rate: 0 }],
+      forwards: [{ id: 'route', toBoxId: cash.id, share: 1 }],
+    })
+    const world = state([cash, asset], [{
+      id: 'legacy-income', kind: 'income', boxId: asset.id, amount: 100, currency: 'EUR',
+      date: FOUR_YEARS.from, createdAt: cash.createdAt,
+    }])
+    expect(boxValueAt(world, cash.id, FOUR_YEARS.to)).toBe(500)
+    expect(boxValueAt(world, asset.id, FOUR_YEARS.to)).toBeCloseTo(1100 * 0.9 ** 4, 6)
+  })
+
+  it('keeps money in its account when an old spillover rule targets an asset', () => {
+    const asset = box({ kind: 'asset', openingBalance: 1000 })
+    const cash = box({
+      openingBalance: 500, acceptance: [{ level: 0, rate: 0 }],
+      forwards: [{ id: 'route', toBoxId: asset.id, share: 1 }],
+    })
+    const world = state([cash, asset], [{
+      id: 'income', kind: 'income', boxId: cash.id, amount: 100, currency: 'EUR',
+      date: FOUR_YEARS.from, createdAt: cash.createdAt,
+    }])
+    expect(boxValueAt(world, cash.id, FOUR_YEARS.to)).toBe(600)
+    expect(boxValueAt(world, asset.id, FOUR_YEARS.to)).toBeCloseTo(1000 * 0.9 ** 4, 6)
+  })
+
+  it('excludes legacy asset funding flags from budgets and planned spending', () => {
+    const cash = box({ openingBalance: 500, fundsGoals: true })
+    const asset = box({ kind: 'asset', openingBalance: 1000, fundsGoals: true })
+    const world = state([cash, asset])
+    const planned: PlannedBuy[] = [{
+      id: 'buy', label: 'Purchase', date: FOUR_YEARS.from, cost: 200,
+      color: cash.color, createdAt: cash.createdAt,
+    }]
+    expect(goalFundingBoxes(world, FOUR_YEARS.from)).toEqual([{ boxId: cash.id, base: 500 }])
+    expect(goalFundingBudget(world, FOUR_YEARS.from)).toBe(500)
+    expect(goalBudgetCurve(world, [FOUR_YEARS.from, FOUR_YEARS.to])).toEqual([500, 500])
+    expect(boxValueAt(world, cash.id, FOUR_YEARS.to, planned)).toBe(300)
+    expect(boxValueAt(world, asset.id, FOUR_YEARS.to, planned)).toBeCloseTo(1000 * 0.9 ** 4, 6)
+    expect(goalFundingBudget(state([asset]), FOUR_YEARS.from)).toBe(0)
+    expect(goalBudgetCurve(state([asset]), [FOUR_YEARS.from, FOUR_YEARS.to])).toEqual([0, 0])
+  })
+
   it('keeps the price paid and compounds the default depreciation', () => {
     const asset = box({ kind: 'asset', openingBalance: 1000 })
     const world = state([asset])

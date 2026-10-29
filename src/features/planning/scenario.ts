@@ -8,6 +8,7 @@
  * unchanged. Nothing here mutates the store until the user explicitly saves.
  */
 import {
+  ActivityLedger,
   occurrencesPerYear,
   roundMoney,
   toBase,
@@ -16,6 +17,7 @@ import {
 } from '@/domain'
 import { newId } from '@/lib/id'
 import { SWATCHES } from '@/lib/palette'
+import { todayISO } from '@/lib/date'
 
 export type AdjMode = 'pct' | 'fixed'
 export type FlowKind = 'income' | 'expense'
@@ -65,6 +67,12 @@ export function applyScenario(state: FinanceState, sc: Scenario): FinanceState {
     transactions: state.transactions.map((tx) =>
       isFlow(tx) ? { ...tx, amount: adjustedAmount(tx, sc) } : tx,
     ),
+    activityBlueprints: state.activityBlueprints?.map((blueprint) => {
+      const tx = new ActivityLedger({ transactions: [], activityBlueprints: [blueprint] }).current()[0]
+      if (!tx || !isFlow(tx)) return blueprint
+      const amount = adjustedAmount(tx, sc)
+      return amount === tx.amount ? blueprint : new ActivityLedger(state).revise(blueprint, { amount }, todayISO())
+    }),
   }
 }
 
@@ -78,7 +86,7 @@ export interface Flow {
 
 /** Every recurring flow, annualised into base currency, biggest first. */
 export function recurringFlows(state: FinanceState): Flow[] {
-  return state.transactions
+  return new ActivityLedger(state).current()
     .filter(isFlow)
     .map((tx) => {
       const perYear = tx.recurrence ? occurrencesPerYear(tx.recurrence) : 1
@@ -114,7 +122,7 @@ export interface FlowChange {
 /** The flows whose amount the scenario actually changes (rounded to currency). */
 export function scenarioChanges(state: FinanceState, sc: Scenario): FlowChange[] {
   const out: FlowChange[] = []
-  for (const tx of state.transactions) {
+  for (const tx of new ActivityLedger(state).current()) {
     if (!isFlow(tx)) continue
     const to = roundMoney(adjustedAmount(tx, sc), tx.currency)
     if (to !== roundMoney(tx.amount, tx.currency)) out.push({ txId: tx.id, from: tx.amount, to })

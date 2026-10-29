@@ -17,6 +17,16 @@ const rec = (r: Partial<Recurrence>): Recurrence => ({
 })
 
 describe('occurrencesBetween', () => {
+  it('returns to the original day after a shorter month or leap year', () => {
+    const monthly = rec({ anchor: '2026-01-31' })
+    expect(occurrencesBetween(monthly, '2026-01-01', '2026-04-30')).toEqual([
+      '2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30',
+    ])
+    expect(nextOccurrences(monthly, 4, '2026-01-01')).toEqual([
+      '2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30',
+    ])
+    expect(occurrencesBetween(rec({ anchor: '2024-02-29', unit: 'year' }), '2024-01-01', '2028-12-31').at(-1)).toBe('2028-02-29')
+  })
   it('expands a monthly recurrence within a window', () => {
     const out = occurrencesBetween(rec({}), '2026-01-01', '2026-04-30')
     expect(out).toEqual(['2026-01-15', '2026-02-15', '2026-03-15', '2026-04-15'])

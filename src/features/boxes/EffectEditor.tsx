@@ -7,11 +7,6 @@ import { Button, Select, Slider } from '@/ui'
 import { EFFECT_META, effectFactor, toneClass } from './effect-meta'
 import { DEFAULT_EFFECT_RATE, EFFECT_KINDS } from './kinds'
 
-const KIND_OPTIONS = EFFECT_KINDS.map((k) => ({
-  value: k,
-  label: k[0].toUpperCase() + k.slice(1),
-}))
-
 const COMPOUNDING_OPTIONS: { value: Compounding; label: string }[] = [
   { value: 'daily', label: 'Daily' },
   { value: 'monthly', label: 'Monthly' },
@@ -24,10 +19,12 @@ function EffectRow({
   effect,
   onChange,
   onRemove,
+  allowedKinds,
 }: {
   effect: Effect
   onChange: (patch: Partial<Effect>) => void
   onRemove: () => void
+  allowedKinds: EffectKind[]
 }) {
   const meta = EFFECT_META[effect.kind]
   const Arrow = meta.dir === 'up' ? ArrowUpRight : ArrowDownRight
@@ -44,7 +41,7 @@ function EffectRow({
           onValueChange={(v) =>
             onChange({ kind: v as EffectKind, annualRate: DEFAULT_EFFECT_RATE[v as EffectKind] })
           }
-          options={KIND_OPTIONS}
+          options={allowedKinds.map((k) => ({ value: k, label: k[0].toUpperCase() + k.slice(1) }))}
           className="h-9 flex-1"
         />
         <Button size="icon" variant="ghost" onClick={onRemove} aria-label="Remove effect" className="size-9 shrink-0">
@@ -97,14 +94,16 @@ function EffectRow({
 export function EffectEditor({
   value,
   onChange,
+  allowedKinds = EFFECT_KINDS,
 }: {
   value: Effect[]
   onChange: (effects: Effect[]) => void
+  allowedKinds?: EffectKind[]
 }) {
   const add = () =>
     onChange([
       ...value,
-      { id: newId('fx'), kind: 'interest', annualRate: DEFAULT_EFFECT_RATE.interest, compounding: 'annually' },
+      { id: newId('fx'), kind: allowedKinds[0], annualRate: DEFAULT_EFFECT_RATE[allowedKinds[0]], compounding: 'annually' },
     ])
   const update = (id: string, patch: Partial<Effect>) =>
     onChange(value.map((e) => (e.id === id ? { ...e, ...patch } : e)))
@@ -122,7 +121,7 @@ export function EffectEditor({
             exit={{ opacity: 0, height: 0, marginTop: -12 }}
             transition={{ type: 'spring', stiffness: 380, damping: 34 }}
           >
-            <EffectRow effect={e} onChange={(p) => update(e.id, p)} onRemove={() => remove(e.id)} />
+            <EffectRow effect={e} allowedKinds={allowedKinds} onChange={(p) => update(e.id, p)} onRemove={() => remove(e.id)} />
           </motion.div>
         ))}
       </AnimatePresence>

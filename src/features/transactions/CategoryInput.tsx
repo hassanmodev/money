@@ -1,14 +1,17 @@
 import { useId, useState } from 'react'
 import { useStore } from '@/store/store'
+import { ActivityLedger } from '@/domain'
+import { useFinanceState } from '@/store/selectors'
 import { Input } from '@/ui'
 import { CATEGORIES, categorySuggestions, normalizeCategory, validCategory } from './categories'
 
 export function CategoryInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const transactions = useStore((s) => s.transactions)
+  const state = useFinanceState()
   const id = useId()
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)
-  const known = [...CATEGORIES.map((c) => c.key), ...transactions.flatMap((t) => t.category ? [t.category] : [])]
+  const known = [...CATEGORIES.map((c) => c.key), ...[...transactions, ...new ActivityLedger(state).current()].flatMap((t) => t.category ? [t.category] : [])]
   const suggestions = categorySuggestions(value, known)
   const normalized = normalizeCategory(value)
   const options = validCategory(value) && !suggestions.includes(normalized)
